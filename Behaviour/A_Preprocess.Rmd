@@ -34,24 +34,6 @@ library(lme4)
 library(lmerTest)
 
 ```
-#### Chreate Theme for figures
-```{r}
-myTheme <- theme(
-  axis.line = element_line(colour = "black"), 
-  panel.grid.major = element_blank(), 
-  panel.grid.minor = element_blank(),  
-  panel.border = element_blank(),   
-  panel.background = element_blank(),
-  text=element_text(size=16, colour = "black"), 
-  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
-  axis.title.y = element_text( size=20, face="bold", colour = "black"),
-  axis.text = element_text(size=16),
-  strip.text =  element_text( size=16),
-  strip.background = element_rect(fill = "white", colour = "black"),
-  legend.background = element_rect(colour = "black"),
-  legend.key = element_blank(),
-  legend.key.size = unit(3, "lines"))
-```
 
 ### 2. Load Data
 #### 2.1 Food
@@ -850,7 +832,7 @@ sd(trialc$trialnr)
 data_social_hungry<-subset(data_social_hungry, RT>250)
 data_social_sated<-subset(data_social_sated, RT>250)
 
-data_hungry_long<-subset(data_hungry_long, RT>250)
+data_social_hungry_long<-subset(data_social_hungry_long, RT>250)
 data_social_sated_long<-subset(data_social_sated_long, RT>250)
 
 # b) larger than mean(RT) + 4*sd(RT); within subject
@@ -903,7 +885,20 @@ data_social_combined <- bind_rows(
   dplyr::mutate(data_social_sated, condition = "sated")
 )
 
+data_social_combined <- data_social_combined %>%
+  mutate(choice = ifelse(
+    (self_left > self_right & response == 'left') | 
+    (self_left < self_right & response == 'right'),
+    "selfish",
+    "prosocial"
+  ))
 
+data_social_combined <- data_social_combined %>%
+  mutate(choice2 = case_when(
+    choice == "selfish" ~ 1,
+    choice == "prosocial" ~ 0,
+    TRUE ~ NA_real_  # Handle other cases, if any
+  ))
 ```
 
 #### 4.3 Discount
@@ -913,7 +908,7 @@ data_social_combined <- bind_rows(
 data_discount_hungry<-subset(data_discount_hungry, RT>250)
 data_discount_sated<-subset(data_discount_sated, RT>250)
 
-data_hungry_long<-subset(data_hungry_long, RT>250)
+data_discount_hungry_long<-subset(data_discount_hungry_long, RT>250)
 data_discount_sated_long<-subset(data_discount_sated_long, RT>250)
 
 # b) larger than mean(RT) + 4*sd(RT); within subject
@@ -965,6 +960,21 @@ data_discount_combined <- bind_rows(
   dplyr::mutate(data_discount_hungry, condition = "hungry"),
   dplyr::mutate(data_discount_sated, condition = "sated")
 )
+
+data_discount_combined <- data_discount_combined %>%
+  mutate(choice = ifelse(
+    (time_left > time_right & response == 'left') | 
+    (time_left < time_right & response == 'right'),
+    "patient",
+    "impulsive"
+  ))
+
+data_discount_combined <- data_discount_combined %>%
+  mutate(choice2 = case_when(
+    choice == "impulsive" ~ 1,
+    choice == "patient" ~ 0,
+    TRUE ~ NA_real_  # Handle other cases, if any
+  ))
 
 ```
 
