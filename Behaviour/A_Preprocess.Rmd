@@ -1,0 +1,1011 @@
+---
+title: "Preprocess"
+output: html_document
+date: "2024-10-07"
+---
+### Information
+This script creates combines questionnaire and experimental data, It calculates relevant control variables for the GLMMs and implements the preprocessing in line with our preregistration: https://osf.io/tmdw3 
+Ultimately, the script saves the dataframes used in behavioural and modeling analyses. 
+
+Original xlsx and csv files can provided upon request. Variables collected but not considered in our analyses include: menstrual cycle (all information to estimate cycle), estimated last meal intake (what, how much and when) as well as usual brekfast routine (how often, what and when). All other variables are contained in the .RData files.
+
+### 1. Preparations
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(readxl)
+library(ggpubr)
+library(rstatix)
+library(readr)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library (ggplot2)
+library(tibble)
+library(rstatix)
+library(tidyverse)
+library(ez)
+library(lme4)
+library(lmerTest)
+
+```
+#### Chreate Theme for figures
+```{r}
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+### 2. Load Data
+#### 2.1 Food
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+filelist <- list.files(path="data_food", pattern = ".csv", full.names = TRUE)
+
+# Create empty dataframes for each category
+data_hungry <- tibble()
+data_sated <- tibble()
+data_hungry_long <- tibble()
+data_sated_long <- tibble()
+mood_hungry <- tibble()
+mood_sated <- tibble()
+
+# Read in data for all participants in all conditions
+for (singlefile in filelist) {
+  # Get the subject number from the file name
+  subject <- as.numeric(gsub("[^0-9]", "", singlefile))
+
+  # Check file name pattern and read data accordingly
+  if (grepl("subh_", singlefile)) {
+    if (grepl("long", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_hungry_long <- rbind(data_hungry_long, vpfile)
+    } else if (grepl("other_", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      mood_hungry <- rbind(mood_hungry, vpfile)
+    } else {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_hungry <- rbind(data_hungry, vpfile)
+    }
+  } else if (grepl("subs_", singlefile)) {
+    if (grepl("long", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_sated_long <- rbind(data_sated_long, vpfile)
+    } else if (grepl("other_", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      mood_sated <- rbind(mood_sated, vpfile)
+    } else {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_sated <- rbind(data_sated, vpfile)
+    }
+  }
+}
+
+```
+
+#### b. Social
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+filelist <- list.files(path="data_social", pattern = ".csv", full.names = TRUE)
+
+# Create empty dataframes for each category
+data_social_hungry <- tibble()
+data_social_sated <- tibble()
+data_social_hungry_long <- tibble()
+data_social_sated_long <- tibble()
+
+# Read in data for all participants in all conditions
+for (singlefile in filelist) {
+  print(singlefile)
+  # Get the subject number from the file name
+  subject <- as.numeric(gsub("[^0-9]", "", singlefile))
+  
+  # Check file name pattern and read data accordingly
+  if (grepl("subh_", singlefile)) {
+    if (grepl("long", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_social_hungry_long <- rbind(data_social_hungry_long, vpfile)
+    # } else if (grepl("other_", singlefile)) {
+    #   vpfile <- suppressWarnings(read_csv(singlefile))
+    #   vpfile$subject <- subject  # Add subject number as a column
+    #   mood_hungry <- rbind(mood_hungry, vpfile)
+    } else {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_social_hungry <- rbind(data_social_hungry, vpfile)
+    }
+  } else if (grepl("subs_", singlefile)) {
+    if (grepl("long", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_social_sated_long <- rbind(data_social_sated_long, vpfile)
+    # } else if (grepl("other_", singlefile)) {
+    #   vpfile <- suppressWarnings(read_csv(singlefile))
+    #   vpfile$subject <- subject  # Add subject number as a column
+    #   mood_sated <- rbind(mood_sated, vpfile)
+    } else {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_social_sated <- rbind(data_social_sated, vpfile)
+    }
+  }
+}
+
+```
+
+#### c. Discount
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+filelist <- list.files(path="data_discount", pattern = ".csv", full.names = TRUE)
+
+# Create empty dataframes for each category
+data_discount_hungry <- tibble()
+data_discount_sated <- tibble()
+data_discount_hungry_long <- tibble()
+data_discount_sated_long <- tibble()
+
+# Read in data for all participants in all conditions
+for (singlefile in filelist) {
+  print(singlefile)
+  # Get the subject number from the file name
+  subject <- as.numeric(gsub("[^0-9]", "", singlefile))
+  
+  # Check file name pattern and read data accordingly
+  if (grepl("subh_", singlefile)) {
+    if (grepl("long", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_discount_hungry_long <- rbind(data_discount_hungry_long, vpfile)
+    # } else if (grepl("other_", singlefile)) {
+    #   vpfile <- suppressWarnings(read_csv(singlefile))
+    #   vpfile$subject <- subject  # Add subject number as a column
+    #   mood_hungry <- rbind(mood_hungry, vpfile)
+    } else {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_discount_hungry <- rbind(data_discount_hungry, vpfile)
+    }
+  } else if (grepl("subs_", singlefile)) {
+    if (grepl("long", singlefile)) {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_discount_sated_long <- rbind(data_discount_sated_long, vpfile)
+    # } else if (grepl("other_", singlefile)) {
+    #   vpfile <- suppressWarnings(read_csv(singlefile))
+    #   vpfile$subject <- subject  # Add subject number as a column
+    #   mood_sated <- rbind(mood_sated, vpfile)
+    } else {
+      vpfile <- suppressWarnings(read_csv(singlefile))
+      vpfile$subject <- subject  # Add subject number as a column
+      data_discount_sated <- rbind(data_discount_sated, vpfile)
+    }
+  }
+}
+```
+
+
+```{r}
+# for some stupid reason I did not save the food images and nutri scores in the long file so I will add them via subject and trial number from the short file
+data_subset1 <- data_hungry %>%
+  dplyr::select(subject, trial, food_right, nutri_right, food_left, nutri_left)
+
+data_hungry_long <- data_hungry_long %>%
+  left_join(data_subset1, by = c("subject", "trial"))
+
+data_subset2 <- data_sated %>%
+  dplyr::select(subject, trial, food_right, nutri_right, food_left, nutri_left)
+
+data_sated_long <- data_sated_long %>%
+  left_join(data_subset2, by = c("subject", "trial"))
+
+```
+
+### 3. Add additional info to  dataframes
+### 3.1 Mood & Hunger State
+```{r}
+library(openxlsx)
+# Function to process mood data into wide format
+process_mood_data <- function(data, condition) {
+  data %>%
+    filter(Choice_var %in% c('p1', 'p2', 'p3')) %>%
+    dplyr::mutate(
+      response_mood = dplyr::recode(response, "gar nicht" = 1, "ein bisschen" = 2, "einigermaßen" = 3, "erheblich" = 4, "äußerst" = 5),
+      affect = case_when(
+        panas %in% c("ängstlich", "beschämt", "gereizt", "bekümmert", "verärgert", "schuldig", "erschrocken", "nervös", "durcheinander", "feindselig") ~ "NA",
+        panas %in% c("stolz", "aktiv", "freudig", "interessiert", "stark", "angeregt", "begeistert", "entschlossen", "aufmerksam", "wach") ~ "PA"
+      )
+    ) %>%
+    filter(!is.na(panas)) %>%
+    group_by(subject, affect, Choice_var) %>%
+    summarise(mean_affect = mean(response_mood), .groups = "drop") %>%
+    pivot_wider(
+      id_cols = subject,
+      names_from = c(Choice_var, affect),
+      values_from = mean_affect,
+      names_sep = "_"
+    ) %>%
+    mutate(condition = condition)
+}
+
+# Process sated and hungry data
+mood_sated_agg <- process_mood_data(mood_sated, "sated")
+mood_hungry_agg <- process_mood_data(mood_hungry, "hungry")
+
+# Process hunger state data
+process_hs <- function(data) {
+  data %>%
+    filter(Choice_var %in% c('hs1', 'hs2', 'hs3')) %>%
+    group_by(subject, Choice_var) %>%
+    summarise(mean_hs = mean(hungry), .groups = "drop") %>%
+    pivot_wider(
+      id_cols = subject,
+      names_from = Choice_var,
+      values_from = mean_hs,
+      names_sep = "_"
+    ) 
+}
+
+HS_agg_s <- process_hs(mood_sated)
+HS_agg_h <- process_hs(mood_hungry)
+
+# Combine data
+combine_data <- function(data, mood_agg, hs_agg) {
+  data %>%
+    left_join(mood_agg, by = 'subject') %>%
+    left_join(hs_agg, by = 'subject') %>%
+    group_by(subject) %>%
+    fill(p1_PA, p2_PA, p3_PA, p1_NA, p2_NA, p3_NA, hs1, hs2, hs3, .direction = 'downup')
+    
+}
+
+# Food
+data_sated <- combine_data(data_sated, mood_sated_agg, HS_agg_s)
+data_hungry <- combine_data(data_hungry, mood_hungry_agg, HS_agg_h)
+
+# Social
+data_social_sated <- combine_data(data_social_sated, mood_sated_agg, HS_agg_s)
+data_social_hungry <- combine_data(data_social_hungry, mood_hungry_agg, HS_agg_h)
+
+# Discount
+data_discount_sated <- combine_data(data_discount_sated, mood_sated_agg, HS_agg_s)
+data_discount_hungry <- combine_data(data_discount_hungry, mood_hungry_agg, HS_agg_h)
+
+# Process time point 0 data
+mood_t0 <- read.xlsx("PANAS_HS_t0.xlsx") %>%
+  dplyr::select(-c(1:17)) %>%
+  dplyr::mutate(across(20:39, ~ dplyr::recode(., "gar nicht" = 1, "ein bisschen" = 2, "einigermaßen" = 3, "erheblich" = 4, "äußerst" = 5))) %>%
+  slice(-32) %>%
+  dplyr::mutate(
+    p0_PA = rowMeans(dplyr::select(., c(20, 22, 23, 25, 29, 30, 32, 34, 36, 37))),
+    p0_NA = rowMeans(dplyr::select(., c(21, 24, 26, 27, 28, 31, 33, 35, 38, 39)))
+  ) %>%
+  dplyr::rename(subject = 2, hs0 = 18, sated = 19)
+
+# Create control dataset
+control <- mood_t0 %>%
+  dplyr::select(subject, hs0, p0_PA, p0_NA) %>%
+  filter(subject %in% HS_agg_s$subject)
+
+# Food
+data_sated <- data_sated %>%
+  left_join(control, by = "subject")
+
+# Social
+data_social_sated <- data_social_sated %>%
+  left_join(control, by = "subject")
+
+# Discount
+data_discount_sated <- data_discount_sated %>%
+  left_join(control, by = "subject")
+
+```
+
+#### 3.2 nutri score
+```{r}
+# Define the function
+recode_nutri<- function(data) {
+  data <- data %>%
+    dplyr::mutate(
+      nutri_right2 = dplyr::recode(nutri_right, 
+                                   "A.png" = 5, 
+                                   "B.png" = 4, 
+                                   "C.png" = 3, 
+                                   "D.png" = 2, 
+                                   "E.png" = 1),
+      nutri_left2 = dplyr::recode(nutri_left, 
+                                   "A.png" = 5, 
+                                   "B.png" = 4, 
+                                   "C.png" = 3, 
+                                   "D.png" = 2, 
+                                   "E.png" = 1)
+    )
+  return(data)
+}
+
+```
+
+```{r}
+#add nutri score to data
+data_hungry<-recode_nutri(data_hungry)
+data_hungry_long<-recode_nutri(data_hungry_long)
+data_sated<-recode_nutri(data_sated)
+data_sated_long<-recode_nutri(data_sated_long)
+
+```
+
+#### 3.3 Objective Cal
+```{r}
+obj_cal<-read_excel("obje_cal.xlsx")
+obj_cal$Energy<-as.numeric(obj_cal$Energy)
+
+energy_lookup <- setNames(obj_cal$Energy, obj_cal$Food_image)
+gram_lookup <- setNames(obj_cal$total_weight, obj_cal$Food_image)
+total_cal_lookup <- setNames(obj_cal$total_kcal, obj_cal$Food_image)
+
+add_obj_cal<-function(data){
+  data$kcal_left <- NA
+  data$kcal_right <- NA
+  data$gram_left <- NA
+  data$gram_right <- NA
+  data$total_cal_left <- NA
+  data$total_cal_right <- NA
+
+  for (i in 1:nrow(data)) {
+    food_item_left <- data$food_left[i]
+    # Assign the corresponding value from energy_lookup if it exists
+    if (food_item_left %in% names(energy_lookup|gram_lookup|total_cal_lookup)) {
+      data$kcal_left[i] <- energy_lookup[food_item_left]
+      data$gram_left[i] <- gram_lookup[food_item_left]
+      data$total_cal_left[i] <- total_cal_lookup[food_item_left]
+    } 
+  }
+
+  for (i in 1:nrow(data)) {
+    food_item_right <- data$food_right[i]
+    # Assign the corresponding value from energy_lookup if it exists
+    if (food_item_right %in% names(energy_lookup|gram_lookup|total_cal_lookup)) {
+      data$kcal_right[i] <- energy_lookup[food_item_right]
+      data$gram_right[i] <- gram_lookup[food_item_right]
+      data$total_cal_right[i] <- total_cal_lookup[food_item_right]
+    }
+  }
+  return(data)
+}
+```
+
+```{r}
+#add objective cal  to data
+data_hungry<-add_obj_cal(data_hungry)
+data_hungry_long<-add_obj_cal(data_hungry_long)
+data_sated<-add_obj_cal(data_sated)
+data_sated_long<-add_obj_cal(data_sated_long)
+```
+
+
+#### 3.4 Value differences 
+##### 3.4.1 Calculate mean score across condition
+```{r}
+data_hungry <- subset(data_hungry, subject %in% data_sated$subject)
+data_sated <- subset(data_sated, subject %in% data_hungry$subject)
+
+data_hungry_long <- subset(data_hungry_long, subject %in% data_sated_long$subject)
+data_sated_long <- subset(data_sated_long, subject %in% data_hungry_long$subject)
+
+
+rating_hungry<- data_hungry %>%
+  pivot_longer(cols = starts_with("food_"), names_to = "food_position", values_to = "food_img") %>%
+  mutate(
+    taste = case_when(
+      food_position == "food_left" ~ taste_left,
+      food_position == "food_right" ~ taste_right
+    ),
+    health = case_when(
+      food_position == "food_left" ~ health_left,
+      food_position == "food_right" ~ health_right
+    ), 
+    pref = case_when(
+      food_position == "food_left" ~ pref_left,
+      food_position == "food_right" ~ pref_right
+    ),
+    cal = case_when(
+      food_position == "food_left" ~ cal_left,
+      food_position == "food_right" ~ cal_right
+    )
+  ) %>%
+  select(subject, food_img, taste, health, pref, cal) %>%
+  distinct()
+
+rating_sated<- data_sated %>%
+  pivot_longer(cols = starts_with("food_"), names_to = "food_position", values_to = "food_img") %>%
+  mutate(
+    taste = case_when(
+      food_position == "food_left" ~ taste_left,
+      food_position == "food_right" ~ taste_right
+    ),
+    health = case_when(
+      food_position == "food_left" ~ health_left,
+      food_position == "food_right" ~ health_right
+    ), 
+    pref = case_when(
+      food_position == "food_left" ~ pref_left,
+      food_position == "food_right" ~ pref_right
+    ),
+    cal = case_when(
+      food_position == "food_left" ~ cal_left,
+      food_position == "food_right" ~ cal_right
+    )
+  ) %>%
+  select(subject, food_img, taste, health, pref, cal) %>%
+  distinct()
+
+# Combine the two DataFrames assuming `condition1` and `condition2` are your two DataFrames
+combined_rating <- bind_rows(rating_sated, rating_hungry)
+
+# Calculate the mean score of taste and health for each image per subject
+mean_scores <- combined_rating %>%
+  group_by(subject, food_img) %>%
+  summarize(
+    mean_taste = mean(taste, na.rm = TRUE),
+    mean_health = mean(health, na.rm = TRUE),
+    mean_pref = mean(pref, na.rm = TRUE),
+    mean_cal = mean(cal, na.rm = TRUE)
+  )
+
+add_mean_rate<-function(data){
+  left_merged <- data %>%
+    left_join(mean_scores, by = c("subject" = "subject", "food_left" = "food_img")) %>%
+    rename(mean_taste_left = mean_taste, mean_health_left = mean_health, mean_pref_left = mean_pref, mean_cal_left = mean_cal)
+
+  data<- left_merged %>%
+    left_join(mean_scores, by = c("subject" = "subject", "food_right" = "food_img")) %>%
+    rename(mean_taste_right = mean_taste, mean_health_right = mean_health,  mean_pref_right = mean_pref, mean_cal_right = mean_cal)
+  return (data)
+}
+
+data_hungry<-add_mean_rate(data_hungry)
+data_sated<-add_mean_rate(data_sated)
+
+data_hungry_long<-add_mean_rate(data_hungry_long)
+data_sated_long<-add_mean_rate(data_sated_long)
+
+
+```
+
+
+##### 3.4.2 Calculate VDs
+```{r}
+# Food
+add_vds <- function(data){
+  data$taste_vd <- 0
+  data$health_vd <- 0
+  data$pref_vd <- 0
+  data$cal_vd <- 0
+  data$mean_taste_vd <- 0
+  data$mean_health_vd <- 0
+  data$mean_pref_vd <- 0
+  data$mean_cal_vd <- 0
+  data$obj_cal_vd <- 0
+  data$total_cal_vd <- 0
+  data$dwelldiff_chosen <- 0
+  data$rel_dwelldiff_chosen <- 0
+  data$rel_dwelldiff_taste <- 0
+  data$nutri_diff <- 0
+  for (i in 1:nrow(data)){
+    if(data$response[i]=='left') { 
+      data$taste_vd[i] <- data$taste_left[i] - data$taste_right[i] 
+      data$health_vd[i] <- data$health_left[i] - data$health_right[i] 
+      data$pref_vd[i] <- data$pref_left[i] - data$pref_right[i] 
+      data$cal_vd[i] <- data$cal_left[i] - data$cal_right[i] 
+      data$mean_taste_vd[i] <- data$mean_taste_left[i] - data$mean_taste_right[i] 
+      data$mean_health_vd[i] <- data$mean_health_left[i] - data$mean_health_right[i] 
+      data$mean_pref_vd[i] <- data$mean_pref_left[i] - data$mean_pref_right[i] 
+      data$mean_cal_vd[i] <- data$mean_cal_left[i] - data$mean_cal_right[i] 
+      data$obj_cal_vd [i] <- data$kcal_left[i] - data$kcal_right[i] 
+      data$total_cal_vd [i] <- data$total_cal_left[i] - data$total_cal_right[i] 
+      data$dwelldiff_chosen[i]  <- (data$foodleft_time[i] + data$nutrileft_time[i])-(data$foodright_time[i] + data$nutriright_time[i])
+      data$rel_dwelldiff_chosen[i]  <- (data$foodleft_time[i] + data$nutrileft_time[i])/(data$foodleft_time[i] + data$nutrileft_time[i]+data$foodright_time[i] + data$nutriright_time[i])
+      data$nutri_diff[i] <- data$nutri_left2[i] - data$nutri_right2[i] 
+      data$rel_dwelldiff_taste[i] <- (data$foodleft_time[i] + data$foodright_time[i])/(data$foodleft_time[i] + data$nutrileft_time[i]+data$foodright_time[i] + data$nutriright_time[i])
+    }else if(data$response[i]=='right'){
+      data$taste_vd[i] <- data$taste_right[i] - data$taste_left[i] 
+      data$health_vd[i] <- data$health_right[i] - data$health_left[i] 
+      data$pref_vd[i] <- data$pref_right[i] - data$pref_left[i] 
+      data$cal_vd[i] <- data$cal_right[i] - data$cal_left[i]
+      data$mean_taste_vd[i] <- data$mean_taste_right[i] - data$mean_taste_left[i] 
+      data$mean_health_vd[i] <-  data$mean_health_right[i] - data$mean_health_left[i]
+      data$mean_pref_vd[i] <- data$mean_pref_right[i] - data$mean_pref_left[i] 
+      data$mean_cal_vd[i] <-  data$mean_cal_right[i] - data$mean_cal_left[i] 
+      data$obj_cal_vd [i] <- data$kcal_right[i] - data$kcal_left[i]
+      data$total_cal_vd [i] <- data$total_cal_right[i] -data$total_cal_left[i] 
+      data$dwelldiff_chosen[i]  <- (data$foodright_time[i] + data$nutriright_time[i])-(data$foodleft_time[i] + data$nutrileft_time[i])
+      data$rel_dwelldiff_chosen[i]  <- (data$foodright_time[i] + data$nutriright_time[i])/(data$foodright_time[i] + data$nutriright_time[i]+data$foodleft_time[i] + data$nutrileft_time[i])
+      data$nutri_diff[i] <- data$nutri_right2[i] - data$nutri_left2[i] 
+      data$rel_dwelldiff_taste[i] <- (data$foodleft_time[i] + data$foodright_time[i])/(data$foodleft_time[i] + data$nutrileft_time[i]+data$foodright_time[i] + data$nutriright_time[i])
+    }
+  } 
+  return(data)
+}
+```
+
+```{r}
+#add VDs to data
+data_hungry<-add_vds(data_hungry)
+data_sated<-add_vds(data_sated)
+
+```
+
+```{r}
+# Social
+add_vds2 <- function(data){
+  data$self_vd <- 0
+  data$ngo_vd <- 0
+  data$dwelldiff_chosen <- 0
+  data$rel_dwelldiff_chosen <- 0
+  data$rel_dwelldiff_self <- 0
+  for (i in 1:nrow(data)){
+    if(data$response[i]=='left') { 
+      data$self_vd[i] <- data$self_left[i] - data$self_right[i] 
+      data$ngo_vd[i] <- data$ngo_left[i] - data$ngo_right[i] 
+      data$dwelldiff_chosen[i]  <- (data$selfleft_time[i] + data$ngoleft_time[i])-(data$selfright_time[i] + data$ngoright_time[i])
+      data$rel_dwelldiff_chosen[i]  <- (data$selfleft_time[i] + data$ngoleft_time[i])/(data$selfleft_time[i] + data$ngoleft_time[i]+data$selfright_time[i] + data$ngoright_time[i])
+      data$rel_dwelldiff_self[i] <- (data$selfleft_time[i] + data$selfright_time[i])/(data$selfleft_time[i] + data$ngoleft_time[i]+data$selfright_time[i] + data$ngoright_time[i])
+    }else if(data$response[i]=='right'){ 
+      data$self_vd[i] <- data$self_right[i] - data$self_left[i] 
+      data$ngo_vd[i] <- data$ngo_right[i] - data$ngo_left[i] 
+      data$dwelldiff_chosen[i]  <- (data$selfright_time[i] + data$ngoright_time[i])-(data$selfleft_time[i] + data$ngoleft_time[i])
+      data$rel_dwelldiff_chosen[i]  <- (data$selfright_time[i] + data$ngoright_time[i])/(data$selfright_time[i] + data$ngoright_time[i]+data$selfleft_time[i] + data$ngoleft_time[i])
+      data$rel_dwelldiff_self[i] <- (data$selfleft_time[i] + data$selfright_time[i])/(data$selfleft_time[i] + data$ngoleft_time[i]+data$selfright_time[i] + data$ngoright_time[i])
+    }
+  } 
+  return(data)
+}
+
+data_social_hungry<-add_vds2(data_social_hungry)
+data_social_sated<-add_vds2(data_social_sated)
+```
+
+```{r}
+# Discount
+add_vds3 <- function(data){
+  data$value_vd <- 0
+  data$time_vd <- 0
+  data$dwelldiff_chosen <- 0
+  data$rel_dwelldiff_chosen <- 0
+  data$rel_dwelldiff_value <- 0
+  for (i in 1:nrow(data)){
+    if(data$response[i]=='left') { 
+      data$value_vd[i] <- data$value_left[i] - data$value_right[i] 
+      data$time_vd[i] <- data$time_left[i] - data$time_right[i] 
+      data$dwelldiff_chosen[i]  <- (data$valueleft_time[i] + data$timeleft_time[i])-(data$valueright_time[i] + data$timeright_time[i])
+      data$rel_dwelldiff_chosen[i]  <- (data$valueleft_time[i] + data$timeleft_time[i])/(data$valueleft_time[i] + data$timeleft_time[i]+data$valueright_time[i] + data$timeright_time[i])
+      data$rel_dwelldiff_value[i] <- (data$valueleft_time[i] + data$valueright_time[i])/(data$valueleft_time[i] + data$timeleft_time[i]+data$valueright_time[i] + data$timeright_time[i])
+    }else if(data$response[i]=='right'){ 
+      data$value_vd[i] <- data$value_right[i] - data$value_left[i] 
+      data$time_vd[i] <- data$time_right[i] - data$time_left[i] 
+      data$dwelldiff_chosen[i]  <- (data$valueright_time[i] + data$timeright_time[i])-(data$valueleft_time[i] + data$timeleft_time[i])
+      data$rel_dwelldiff_chosen[i]  <- (data$valueright_time[i] + data$timeright_time[i])/(data$valueright_time[i] + data$timeright_time[i]+data$valueleft_time[i] + data$timeleft_time[i])
+      data$rel_dwelldiff_value[i] <- (data$valueleft_time[i] + data$valueright_time[i])/(data$valueleft_time[i] + data$timeleft_time[i]+data$valueright_time[i] + data$timeright_time[i])
+    }
+  } 
+  return(data)
+}
+
+data_discount_hungry<-add_vds3(data_discount_hungry)
+data_discount_sated<-add_vds3(data_discount_sated)
+
+```
+
+#### Eating behaviour: FEV
+```{r}
+fev <- read_excel("FEV.xlsx")
+# make Data Usable
+fev <- fev[, -c(1:18)]
+replacements2 <- c("niemals" = 1, "selten" = 2, "manchmal" = 3, "oft" = 4, "sehr oft" = 5)
+columns_to_convert2 <- names(fev)[c(2:31)]
+
+for (col in columns_to_convert2) {
+  fev[[col]] <- replacements2[fev[[col]]]
+}
+
+fev$restricted<-rowMeans(fev[, c(6,8,11,13,14,16,20,22,25,28)])
+fev$emotional<-rowMeans(fev[, c(2,5,7,9,10,12,15,18,23,31)])
+fev$external<-rowMeans(fev[, c(3,4,17,19,21,24,26,27,29,30)])
+
+fev <- fev[, c(1, 32, 33, 34)]
+
+# Define the function to merge the dataframes
+add_fev <- function(fev, data) {
+  # Merge the dataframes on the 'subject' column
+  data <- data %>% 
+    left_join(fev, by = "subject")
+  
+  return(data)
+}
+
+# Food
+data_hungry<-add_fev(fev, data_hungry)
+data_sated<-add_fev(fev, data_sated)
+
+# Social
+data_social_hungry<-add_fev(fev, data_social_hungry)
+data_social_sated<-add_fev(fev, data_social_sated)
+
+# Discount
+data_discount_hungry<-add_fev(fev, data_discount_hungry)
+data_discount_sated<-add_fev(fev, data_discount_sated)
+
+```
+
+#### Demographics
+```{r}
+demo<-read_excel("Demographics.xlsx")
+
+#(a) delete people who do not fullfill criteria and did not participate in experiment
+demo <- subset(demo, !is.na(ID2))
+#(b) delete unimportant columns
+demo <- demo[,-1:-18]
+demo <- demo[,c(-3:-11, -18, -20)]
+
+#(c) BMI berechnen
+demo$height<-as.numeric(demo$height)
+demo$weight<-as.numeric(demo$weight)
+demo$age<-as.numeric(demo$age)
+demo$BMI=demo$weight/(demo$height/100)^2
+ #(d) mean center BMI
+demo$BMI_cent=demo$BMI-(mean(demo$BMI))
+#(je mean center age
+demo$age_cent=demo$age-(mean(demo$age))
+```
+
+```{r}
+# get Demographic information 
+# 1. Age
+mean_age<-mean(demo$age)
+std_age<-sd(demo$age)
+# 2. BMI
+mean_bmi<-mean(demo$BMI)
+std_bmi<-sd(demo$BMI)
+# 3. Gender
+gender_counts <- table(demo$gender)
+# 4. Degree
+degree_counts <- table(demo$education)
+# 3. Income
+income_counts <- table(demo$available_income)
+
+gender_counts
+degree_counts
+income_counts
+```
+
+```{r}
+# add demographic information
+add_demo <- function(demo, data) {
+  # Merge the dataframes on the 'subject' column
+  data <- data %>% 
+    left_join(demo, by= c("subject" = "ID2"))
+  
+  return(data)
+}
+
+data_hungry<-add_demo(demo, data_hungry)
+data_sated<-add_demo(demo, data_sated)
+
+data_social_hungry<-add_demo(demo, data_social_hungry)
+data_social_sated<-add_demo(demo, data_social_sated)
+
+data_discount_hungry<-add_demo(demo, data_discount_hungry)
+data_discount_sated<-add_demo(demo, data_discount_sated)
+
+```
+
+
+### 4. Data Preprocessing 
+#### 4.1 Food
+```{r}
+# 1 In line with preregistration (https://osf.io/tmdw3) exclude trials:
+# a) RT smaller than 250ms
+data_hungry<-subset(data_hungry, RT>250)
+data_sated<-subset(data_sated, RT>250)
+
+data_hungry_long<-subset(data_hungry_long, RT>250)
+data_sated_long<-subset(data_sated_long, RT>250)
+
+# b) larger than mean(RT) + 4*sd(RT); within subject
+data_hungry_sub <- data_hungry %>% 
+  group_by(subject) %>% 
+  summarize(rt_mean = mean(RT), sd_rt=sd(RT))
+
+df_hungry <- merge(data_hungry, data_hungry_sub, by = "subject", all.x = TRUE)
+data_hungry <- df_hungry %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+data_sated_sub <- data_sated %>% 
+  group_by(subject) %>% 
+  summarize(rt_mean = mean(RT), sd_rt=sd(RT))
+
+df_sated <- merge(data_sated, data_sated_sub, by = "subject", all.x = TRUE)
+data_sated <- df_sated %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+# same for long dataframe
+df_hungry_long <- merge(data_hungry_long, data_hungry_sub, by = "subject", all.x = TRUE)
+data_hungry_long <- df_hungry_long %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+df_sated_long <- merge(data_sated_long, data_sated_sub, by = "subject", all.x = TRUE)
+data_sated_long <- df_sated_long %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+#2 Remove rows with subjects not in data_sated from data_hungry
+data_hungry <- data_hungry %>%
+  dplyr::mutate(condition = "hungry")
+data_sated <- data_sated %>%
+  dplyr::mutate(condition = "sated")
+
+data_hungry <- subset(data_hungry, subject %in% data_sated$subject)
+data_sated <- subset(data_sated, subject %in% data_hungry$subject)
+
+# same for long dataframe
+data_hungry_long <- data_hungry_long %>%
+  dplyr::mutate(condition = "hungry")
+data_sated_long <- data_sated_long %>%
+  dplyr::mutate(condition = "sated")
+
+data_hungry_long <- subset(data_hungry_long, subject %in% data_sated_long$subject)
+data_sated_long <- subset(data_sated_long, subject %in% data_hungry_long$subject)
+
+
+# Create three dataframes:
+#a) all choices for cal calculations
+data_hungry_neu <- data_hungry 
+data_sated_neu <- data_sated
+
+data_combined_neu <- bind_rows(
+  dplyr::mutate(data_hungry_neu, condition = "hungry"),
+  dplyr::mutate(data_sated_neu, condition = "sated")
+)
+
+data_combined_neu$choice_kcal<-999
+for (i in 1:nrow(data_combined_neu)){
+  if(((data_combined_neu$response[i]=='left') && (data_combined_neu$cal_left[i]>=data_combined_neu$cal_right[i])) || ((data_combined_neu$response[i]=='right') && (data_combined_neu$cal_left[i]<=data_combined_neu$cal_right[i]))) { #left want or right want
+    data_combined_neu$choice_kcal[i]<-1
+  }else {
+    data_combined_neu$choice_kcal[i]<-0
+  }
+}
+
+#b) tasty (like) vs healthy
+data_hungry <- subset(data_hungry, choice != "neutral")
+data_sated <- subset(data_sated, choice != "neutral")
+
+# combine dataframes
+data_combined <- bind_rows(
+  dplyr::mutate(data_hungry, condition = "hungry"),
+  dplyr::mutate(data_sated, condition = "sated")
+)
+
+## check how much trials --> also more trials on average and smaller SD
+trial<- data_combined %>%
+  group_by(subject, condition)%>%
+  summarise(trialnr=length(trial))
+
+mean(trial$trialnr)
+sd(trial$trialnr)
+
+#c) tasty (want) vs health
+data_combined_neu$choice_want<-999
+for (i in 1:nrow(data_combined_neu)){
+  if(((data_combined_neu$response[i]=='left') && (data_combined_neu$pref_left[i]>=data_combined_neu$pref_right[i]) && (data_combined_neu$health_left[i]<=data_combined_neu$health_right[i])) || ((data_combined_neu$response[i]=='right') && (data_combined_neu$pref_left[i]<=data_combined_neu$pref_right[i]) && (data_combined_neu$health_left[i]>=data_combined_neu$health_right[i]))) { #left want or right want
+    data_combined_neu$choice_want[i]<-1
+  }else if (((data_combined_neu$response[i]=='left') && (data_combined_neu$pref_left[i]<data_combined_neu$pref_right[i]) && (data_combined_neu$health_left[i]>data_combined_neu$health_right[i])) || ((data_combined_neu$response[i]=='right') && (data_combined_neu$pref_left[i]>data_combined_neu$pref_right[i]) && (data_combined_neu$health_left[i]<data_combined_neu$health_right[i]))) {
+    data_combined_neu$choice_want[i]<-0
+  }
+}
+
+# exclude neutrals (999s)
+data_combined_want<-subset(data_combined_neu, choice_want != 999)
+
+## check how much trials --> also more trials on average and smaller SD
+trialw<- data_combined_want %>%
+  group_by(subject, condition)%>%
+  summarise(trialnr=length(trial))
+
+mean(trialw$trialnr)
+sd(trialw$trialnr)
+
+## check how much trials --> also more trials on average and smaller SD
+trialc<- data_combined_neu %>%
+  group_by(subject, condition)%>%
+  summarise(trialnr=length(trial))
+
+mean(trialc$trialnr)
+sd(trialc$trialnr)
+
+```
+#### 4.2 Social
+```{r}
+# 1 In line with preregistration (https://osf.io/tmdw3) exclude trials:
+# a) RT smaller than 250ms
+data_social_hungry<-subset(data_social_hungry, RT>250)
+data_social_sated<-subset(data_social_sated, RT>250)
+
+data_hungry_long<-subset(data_hungry_long, RT>250)
+data_social_sated_long<-subset(data_social_sated_long, RT>250)
+
+# b) larger than mean(RT) + 4*sd(RT); within subject
+data_social_hungry_sub <- data_social_hungry %>% 
+  group_by(subject) %>% 
+  summarize(rt_mean = mean(RT), sd_rt=sd(RT))
+
+df_hungry <- merge(data_social_hungry, data_hungry_sub, by = "subject", all.x = TRUE)
+data_social_hungry <- df_hungry %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+data_social_sated_sub <- data_social_sated %>% 
+  group_by(subject) %>% 
+  summarize(rt_mean = mean(RT), sd_rt=sd(RT))
+
+df_sated <- merge(data_social_sated, data_social_sated_sub, by = "subject", all.x = TRUE)
+data_social_sated <- df_sated %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+# same for long dataframe
+df_hungry_long <- merge(data_social_hungry_long, data_social_hungry_sub, by = "subject", all.x = TRUE)
+data_social_hungry_long <- df_hungry_long %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+df_sated_long <- merge(data_social_sated_long, data_social_sated_sub, by = "subject", all.x = TRUE)
+data_social_sated_long <- df_sated_long %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+#2 Remove rows with subjects not in data_social_sated from data_social_hungry
+data_social_hungry <- data_social_hungry %>%
+  dplyr::mutate(condition = "hungry")
+data_social_sated <- data_social_sated %>%
+  dplyr::mutate(condition = "sated")
+
+data_social_hungry <- subset(data_social_hungry, subject %in% data_social_sated$subject)
+data_social_sated <- subset(data_social_sated, subject %in% data_social_hungry$subject)
+
+# same for long dataframe
+data_social_hungry_long <- data_social_hungry_long %>%
+  dplyr::mutate(condition = "hungry")
+data_social_sated_long <- data_social_sated_long %>%
+  dplyr::mutate(condition = "sated")
+
+data_social_hungry_long <- subset(data_social_hungry_long, subject %in% data_social_sated_long$subject)
+data_social_sated_long <- subset(data_social_sated_long, subject %in% data_social_hungry_long$subject)
+
+# combine dataframes
+data_social_combined <- bind_rows(
+  dplyr::mutate(data_social_hungry, condition = "hungry"),
+  dplyr::mutate(data_social_sated, condition = "sated")
+)
+
+
+```
+
+#### 4.3 Discount
+```{r}
+# 1 In line with preregistration (https://osf.io/tmdw3) exclude trials:
+# a) RT smaller than 250ms
+data_discount_hungry<-subset(data_discount_hungry, RT>250)
+data_discount_sated<-subset(data_discount_sated, RT>250)
+
+data_hungry_long<-subset(data_hungry_long, RT>250)
+data_discount_sated_long<-subset(data_discount_sated_long, RT>250)
+
+# b) larger than mean(RT) + 4*sd(RT); within subject
+data_discount_hungry_sub <- data_discount_hungry %>% 
+  group_by(subject) %>% 
+  summarize(rt_mean = mean(RT), sd_rt=sd(RT))
+
+df_hungry <- merge(data_discount_hungry, data_hungry_sub, by = "subject", all.x = TRUE)
+data_discount_hungry <- df_hungry %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+data_discount_sated_sub <- data_discount_sated %>% 
+  group_by(subject) %>% 
+  summarize(rt_mean = mean(RT), sd_rt=sd(RT))
+
+df_sated <- merge(data_discount_sated, data_discount_sated_sub, by = "subject", all.x = TRUE)
+data_discount_sated <- df_sated %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+# same for long dataframe
+df_hungry_long <- merge(data_discount_hungry_long, data_discount_hungry_sub, by = "subject", all.x = TRUE)
+data_discount_hungry_long <- df_hungry_long %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+df_sated_long <- merge(data_discount_sated_long, data_discount_sated_sub, by = "subject", all.x = TRUE)
+data_discount_sated_long <- df_sated_long %>%
+  dplyr::filter(RT <=rt_mean + 4 * sd_rt)
+
+#2 Remove rows with subjects not in data_discount_sated from data_discount_hungry
+data_discount_hungry <- data_discount_hungry %>%
+  dplyr::mutate(condition = "hungry")
+data_discount_sated <- data_discount_sated %>%
+  dplyr::mutate(condition = "sated")
+
+data_discount_hungry <- subset(data_discount_hungry, subject %in% data_discount_sated$subject)
+data_discount_sated <- subset(data_discount_sated, subject %in% data_discount_hungry$subject)
+
+# same for long dataframe
+data_discount_hungry_long <- data_discount_hungry_long %>%
+  dplyr::mutate(condition = "hungry")
+data_discount_sated_long <- data_discount_sated_long %>%
+  dplyr::mutate(condition = "sated")
+
+data_discount_hungry_long <- subset(data_discount_hungry_long, subject %in% data_discount_sated_long$subject)
+data_discount_sated_long <- subset(data_discount_sated_long, subject %in% data_discount_hungry_long$subject)
+
+# combine dataframes
+data_discount_combined <- bind_rows(
+  dplyr::mutate(data_discount_hungry, condition = "hungry"),
+  dplyr::mutate(data_discount_sated, condition = "sated")
+)
+
+```
+
+
+
+#### 4.2 Add change scores in mood an HS
+```{r}
+add_change_scores <- function(data) {
+  # Ensure the condition column is a factor
+  data$condition <- as.factor(data$condition)
+  
+  # Calculate change scores
+  data$PA_change <- ifelse(data$condition == "sated",
+                         data$p3_PA - data$p0_PA,
+                         data$p3_PA - data$p1_PA)
+  
+  data$NA_change <- ifelse(data$condition == "sated",
+                         data$p3_NA - data$p0_NA,
+                         data$p3_NA - data$p1_NA)
+  
+  data$hs_change <- ifelse(data$condition == "sated",
+                         data$hs3 - data$hs0,
+                         data$hs3 - data$hs1)
+  
+  return(data)
+}
+
+# Usage example:
+data_combined <- add_change_scores(data_combined)
+data_social_combined <- add_change_scores(data_social_combined)
+data_discount_combined <- add_change_scores(data_discount_combined)
+data_combined_neu <- add_change_scores(data_combined_neu)
+data_combined_want <- add_change_scores(data_combined_want)
+
+```
+
+
+### 5 save dataframes for subsequent analyses
+```{r}
+save(data_combined, data_combined_neu, data_combined_want, data_social_combined, data_discount_combined, file="had_data.RData")
+save(data_combined, data_sated_neu, data_hungry_neu, data_hungry_long, data_sated_long, file="food_modeling_data.RData")
+save(data_social_combined, data_social_sated, data_social_hungry, data_social_hungry_long, data_social_sated_long, file="social_modeling_data.RData")
+save(data_discount_combined, data_discount_sated, data_discount_hungry, data_discount_hungry_long, data_discount_sated_long, file="discount_modeling_data.RData")
+```

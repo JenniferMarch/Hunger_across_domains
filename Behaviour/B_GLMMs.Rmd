@@ -1,0 +1,562 @@
+---
+title: "Hunger Across Domains - Behavioural Analyses"
+author: "Jennifer March (jennifer.march@uni-hamburg.de"
+date: "2024-06-11"
+output: html_document
+---
+
+### Information
+This script contains the behavioural analyses of food choice, social choice and discounting task, that is GLMMs.
+**Requirements** had_data.RData (in data folder from this git repository: https://github.com/JenniferMarch/Hunger_across_domains)
+
+## 1 Preperations
+### 1.1 Load Libraries
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(readxl)
+library(ggpubr)
+library(rstatix)
+library(readr)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library (ggplot2)
+library(tibble)
+#library(rstatix)
+library(tidyverse)
+library(Matrix)
+library(ez)
+library(car)
+library(lme4)
+library(lmerTest)
+
+```
+
+### 1.2 Chreate Theme for figures
+```{r}
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+### 1.3 Load Pre-processed Data
+```{r}
+load('had_data.RData')
+```
+
+## 2 Behavioural Analyses
+Hypothesis 1: 	Hunger state affects value-based choice across domains. 
+### 2.1 Food Choice
+a)	We predict that hungrier participants are more likely to choose tasty over healthy foods. This will also be reflected in shorter response times towards tasty food options in the hungry condition. 
+#### 2.1.1 Preperation 
+Is Random effects justified?
+```{r}
+data_combined <- data_combined %>%
+  dplyr::mutate(choice2 = dplyr::recode(as.character(choice), "taste" = 1, "health" = 0))
+
+data_combined<-data_combined %>% 
+  dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
+
+#is random effects justified?
+food_model0 <- glm(choice2~1, data=data_combined, family=binomial)
+food_model1 <- glmer(choice2~(1|subject), data=data_combined, family=binomial, control = glmerControl(optimizer = "bobyqa"))
+food_model2 <- glmer(choice2~(1+condition|subject), data=data_combined, family=binomial, , control = glmerControl(optimizer = "bobyqa"))
+
+aic_glm <- AIC(logLik(food_model0))
+aic_glmer1 <- AIC(logLik(food_model1))
+aic_glmer2 <- AIC(logLik(food_model2))
+
+aic_glm
+aic_glmer1
+aic_glmer2
+# AIC of random effects model smaller, hence better
+```
+
+add rel. dwell time difference tasty - healthy option
+```{r}
+data_combined2 <- subset(data_combined,rel_dwelldiff_chosen!='NaN')
+data_combined2$dwelldiff_taste_rel <- 0
+for (i in 1:nrow(data_combined2)){
+  if((data_combined2$choice2[i]==1) && (data_combined2$response2[i]==1)) { # taste & left
+    data_combined2$dwelldiff_taste_rel[i] = (data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])/(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i]+data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])
+  }else if ((data_combined2$choice2[i]==1) && (data_combined2$response2[i]==0)) { # taste & right
+    data_combined2$dwelldiff_taste_rel[i] = (data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])/(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i]+data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])
+  }else if ((data_combined2$choice2[i]==0) && (data_combined2$response2[i]==1)) { # health & left
+    data_combined2$dwelldiff_taste_rel[i] = (data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])/(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i]+data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])
+  }else if ((data_combined2$choice2[i]==0) && (data_combined2$response2[i]==0)) { # health & right
+    data_combined2$dwelldiff_taste_rel[i] = (data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])/(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i]+data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])
+  }
+}
+
+datal_combined2 <- subset(data_combined2, dwelldiff_taste_rel!='NaN')
+```
+
+#### 2.1.2 Choice Models
+```{r}
+food_model3 <- glmer(choice2~condition + scale(dwelldiff_taste_rel) + (1+condition|subject), data=data_combined2, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+food_model4 <- glmer(choice2~condition + scale(dwelldiff_taste_rel) + scale(rel_dwelldiff_taste) + BMI_cent + age_cent + condition * age_cent + scale(rel_dwelldiff_taste) * BMI_cent + scale(rel_dwelldiff_taste) * age_cent  +    (1+condition|subject), data=data_combined2, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+food_model5 <- glmer(choice2~condition + scale(dwelldiff_taste_rel) + scale(rel_dwelldiff_taste) + BMI_cent + age_cent + scale(PA_change) + scale(NA_change)+ scale(hs_change) + scale(external) + scale(emotional) + scale(restricted) + scale(dwelldiff_taste_rel) * scale(restricted) + (1+condition|subject), data=data_combined2, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+summary(food_model3)
+summary(food_model4)
+summary(food_model5)
+
+anova(food_model3, food_model4)
+
+```
+
+#### 2.1.3 RT
+```{r}
+food_RTmodel0 <- glm(RT/1000~1, data=data_combined2,family=Gamma(link="identity"))
+food_RTmodel1 <- glmer(RT/1000~(1|subject), data=data_combined2,family=Gamma(link="identity"))
+food_RTmodel2 <- glmer(RT/1000~(1+condition|subject), data=data_combined2,family=Gamma(link="identity"))
+aic_glm <- AIC(logLik(food_RTmodel0))
+aic_glmer <- AIC(logLik(food_RTmodel1))
+aic_glmer2 <- AIC(logLik(food_RTmodel2))
+aic_glm
+aic_glmer
+aic_glmer2
+
+food_modelRT3 <- glmer(RT/1000~condition + choice2 * scale(dwelldiff_taste_rel) + (1+condition|subject), data=data_combined2, family=Gamma(link="identity"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+food_modelRT4 <- glmer(RT/1000~condition + choice2 + scale(dwelldiff_taste_rel) + scale(rel_dwelldiff_taste) + BMI_cent + age_cent + choice2 * scale(dwelldiff_taste_rel)  + condition * age_cent + scale(rel_dwelldiff_taste) * BMI_cent + scale(rel_dwelldiff_taste) * age_cent  +    (1+condition|subject), data=data_combined2, family=Gamma(link="identity"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+summary(food_modelRT3)
+summary(food_modelRT4)
+
+anova(food_modelRT3, food_modelRT4)
+
+```
+
+
+#### 2.1.4 Quantify effect of hunger 
+```{r}
+# Extract the fixed effects
+fixed_effects <- fixef(food_model3)
+
+# Extract the random effects for each subject
+random_effects <- ranef(food_model3)$subject
+
+# Extract the fixed effect for `condition`
+fixed_condition <- fixed_effects["conditionsated"]
+
+# Extract the random slope for `condition`
+random_condition <- ranef(food_model3)$subject[,"conditionsated"]
+
+# Subject-specific coefficients for `condition`
+subject_specific_condition <- fixed_condition + random_condition
+
+subject_specific_df <- data.frame(
+  subject = rownames(random_effects),
+  condition_effect = subject_specific_condition
+)
+
+library(ggplot2)
+food_plot<-ggplot(subject_specific_df, aes(x = "", y = condition_effect)) +
+  geom_violin(trim = FALSE, color="purple", fill="purple", alpha=0.3) +
+  geom_jitter(width = 0.2, color="purple") +
+  geom_hline(yintercept = fixed_condition, color = "purple", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "black", linetype = "solid") +
+  myTheme +
+  labs(title = "Distribution of Subject-Specific Coefficients for Sated Relative to Hungry Condition",
+       x = "Food Choice",
+       y = "Coefficients(Condition Sated)") +
+  myTheme
+food_plot
+```
+
+
+### 2.2 Social
+We predict a substantial spillover effect of hunger state on social decisions, that is, hungry participants are more likely to choose in line with their idiosyncratic tendencies (i.e., egoistic individuals are more likely to choose egoistic options in a hungry compared to a satiated state and altruistic individuals are more likely to choose an altruistic option in a hungry compared to a satiated state). This will also be reflected in shorter response times towards participants idiosyncratic preference in the hungry condition.
+#### 2.2.1 Preperation 
+Is Random effects justified?
+```{r}
+data_social_combined <- data_social_combined %>%
+  mutate(choice = ifelse(
+    (self_left > self_right & response == 'left') | 
+    (self_left < self_right & response == 'right'),
+    "selfish",
+    "prosocial"
+  ))
+
+data_social_combined <- data_social_combined %>%
+  mutate(choice2 = case_when(
+    choice == "selfish" ~ 1,
+    choice == "prosocial" ~ 0,
+    TRUE ~ NA_real_  # Handle other cases, if any
+  ))
+
+data_social_combined <- data_social_combined %>%
+  mutate(response2 = case_when(
+    response == "left" ~ 1,
+    response == "right" ~ 0,
+    TRUE ~ NA_real_  # Handle other cases, if any
+  ))
+
+#is random effects justified?
+social_model0 <- glm(choice2~1, data=data_social_combined, family=binomial)
+social_model1 <- glmer(choice2~(1|subject), data=data_social_combined, family=binomial, control = glmerControl(optimizer = "bobyqa"))
+social_model2 <- glmer(choice2~(1+condition|subject), data=data_social_combined, family=binomial, , control = glmerControl(optimizer = "bobyqa"))
+
+AIC(logLik(social_model0))
+AIC(logLik(social_model1))
+AIC(logLik(social_model2))
+
+# AIC of random effects model smaller, hence better
+```
+
+add rel. dwell time difference selfish - prosocial option
+```{r}
+data_social_combined$dwelldiff_self_rel <- 0
+for (i in 1:nrow(data_social_combined)){
+  if((data_social_combined$choice2[i]==1) && (data_social_combined$response2[i]==1)) { # self & left
+    data_social_combined$dwelldiff_self_rel[i] = (data_social_combined$selfleft_time[i]+data_social_combined$ngoleft_time[i])/(data_social_combined$selfright_time[i]+data_social_combined$ngoright_time[i]+data_social_combined$selfleft_time[i]+data_social_combined$ngoleft_time[i])
+  }else if ((data_social_combined$choice2[i]==1) && (data_social_combined$response2[i]==0)) { # self & right
+    data_social_combined$dwelldiff_self_rel[i] = (data_social_combined$selfright_time[i]+data_social_combined$ngoright_time[i])/(data_social_combined$selfleft_time[i]+data_social_combined$ngoleft_time[i]+data_social_combined$selfright_time[i]+data_social_combined$ngoright_time[i])
+  }else if ((data_social_combined$choice2[i]==0) && (data_social_combined$response2[i]==1)) { # ngo & left
+    data_social_combined$dwelldiff_self_rel[i] = (data_social_combined$selfright_time[i]+data_social_combined$ngoright_time[i])/(data_social_combined$selfleft_time[i]+data_social_combined$ngoleft_time[i]+data_social_combined$selfright_time[i]+data_social_combined$ngoright_time[i])
+  }else if ((data_social_combined$choice2[i]==0) && (data_social_combined$response2[i]==0)) { # ngo & right
+    data_social_combined$dwelldiff_self_rel[i] = (data_social_combined$selfleft_time[i]+data_social_combined$ngoleft_time[i])/(data_social_combined$selfright_time[i]+data_social_combined$ngoright_time[i]+data_social_combined$selfleft_time[i]+data_social_combined$ngoleft_time[i])
+  }
+}
+
+data_social_combined <- subset(data_social_combined,dwelldiff_self_rel!='NaN')
+```
+
+#### 2.2.2 Choice Model
+```{r}
+social_model3 <- glmer(choice2~condition + scale(dwelldiff_self_rel) + (1+condition|subject), data=data_social_combined, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+social_model4 <- glmer(choice2~condition + scale(dwelldiff_self_rel) + scale(rel_dwelldiff_self) + BMI_cent + age_cent + condition * age_cent + scale(rel_dwelldiff_self) * BMI_cent + scale(rel_dwelldiff_self) * age_cent  +    (1+condition|subject), data=data_social_combined, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+social_model5 <- glmer(choice2~condition + scale(dwelldiff_self_rel) + scale(rel_dwelldiff_self) + BMI_cent + age_cent + scale(PA_change) + scale(NA_change)+ scale(hs_change) + scale(external) + scale(emotional) + scale(restricted) + scale(dwelldiff_self_rel) * scale(restricted) + (1+condition|subject), data=data_social_combined, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+summary(social_model3)
+summary(social_model4)
+summary(social_model5)
+
+anova(social_model3, social_model4)
+```
+
+#### 2.2.3 Response Time Model
+```{r}
+social_RTmodel0 <- glm(RT/1000~1, data=data_social_combined,family=Gamma(link="identity"))
+social_RTmodel1 <- glmer(RT/1000~(1|subject), data=data_social_combined,family=Gamma(link="identity"))
+social_RTmodel2 <- glmer(RT/1000~(1+condition|subject), data=data_social_combined,family=Gamma(link="identity"))
+aic_glm <- AIC(logLik(social_RTmodel0))
+aic_glmer <- AIC(logLik(social_RTmodel1))
+aic_glmer2 <- AIC(logLik(social_RTmodel2))
+aic_glm
+aic_glmer
+aic_glmer2
+
+social_modelRT3 <- glmer(RT/1000~condition + choice2 * scale(dwelldiff_self_rel) + (1+condition|subject), data=data_social_combined, family=Gamma(link="identity"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+social_modelRT4 <- glmer(RT/1000~condition + choice2 + scale(dwelldiff_self_rel) + scale(rel_dwelldiff_self) + BMI_cent + age_cent + choice2 * scale(dwelldiff_self_rel)  + condition * age_cent + scale(rel_dwelldiff_self) * BMI_cent + scale(rel_dwelldiff_self) * age_cent  +    (1+condition|subject), data=data_social_combined, family=Gamma(link="identity"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+summary(social_modelRT3)
+summary(social_modelRT4)
+
+anova(social_modelRT3, social_modelRT4)
+
+```
+
+##### Quantify effect of hunger 
+```{r}
+# Extract the fixed effects
+fixed_effects_social <- fixef(social_model3)
+
+# Extract the random effects for each subject
+random_effects_social <- ranef(social_model3)$subject
+
+# Extract the fixed effect for `condition`
+fixed_condition_social <- fixed_effects_social["conditionsated"]
+
+# Extract the random slope for `condition`
+random_condition_social <- ranef(social_model3)$subject[,"conditionsated"]
+
+# Subject-specific coefficients for `condition`
+subject_specific_condition_social <- fixed_condition_social + random_condition_social
+
+subject_specific_ds <- data.frame(
+  subject = rownames(random_effects_social),
+  condition_effect = subject_specific_condition_social
+)
+
+social_plot<-ggplot(subject_specific_ds, aes(x = "", y = condition_effect)) +
+  geom_violin(trim = FALSE, color="pink", fill="pink", alpha=0.3) +
+  geom_jitter(width = 0.2, color="pink") +
+  geom_hline(yintercept = fixed_condition, color = "pink", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "black", linetype = "solid") +
+  myTheme +
+  labs(title = "Distribution of Subject-Specific Coefficients for Sated Relative to Hungry Condition Effect",
+       x = "Social Choice",
+       y = "Coefficient (Condition Sated)") +
+  myTheme
+social_plot
+```
+
+###Sign test
+```{r}
+combined_summary2 <- data_social_combined %>%
+  group_by(subject, condition) %>%
+  summarise(mean_choice = mean(choice2),std_error_choice = sd(choice2) / sqrt(n()))
+
+signchange <- combined_summary2 %>%
+  group_by(subject) %>%
+  summarise(subtracted_choice = (mean_choice[condition == "sated"]) - (mean_choice[condition == "hungry"]),
+            satedchoice=(mean_choice[condition == "sated"]),
+            hungrychoice=(mean_choice[condition == "hungry"]))
+
+correlation <- cor.test(signchange$satedchoice, signchange$hungrychoice)
+scatter_plot <- ggplot(signchange, aes(x = satedchoice, y = hungrychoice)) +
+  geom_point(color = "#3CC71E")+
+  geom_smooth(method = "lm", se = FALSE, color = "#3CC71E") +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype="dashed") +
+  labs(title = "Selfishness between Conditions", x = "P(Selfish) Sated", y = "P(Selfish) Hungry")+ 
+  myTheme
+scatter_plot
+
+ggsave("Selfishness correlation.png", plot = last_plot(), dpi = 300)
+correlation
+```
+
+
+
+### 2.3 Discount
+We predict a substantial spillover effect of hunger state on intertemporal discounting, that is, hungry sooner smaller rewards over delayed larger rewards more often compared to satiated participants. This will also be reflected in shorter response times towards sooner smaller reward options in the hungry condition.
+#### 2.3.1 Preparation 
+Is Random effects justified?
+```{r}
+data_discount_combined <- data_discount_combined %>%
+  mutate(choice = ifelse(
+    (time_left > time_right & response == 'left') | 
+    (time_left < time_right & response == 'right'),
+    "patient",
+    "impulsive"
+  ))
+
+data_discount_combined <- data_discount_combined %>%
+  mutate(choice2 = case_when(
+    choice == "impulsive" ~ 1,
+    choice == "patient" ~ 0,
+    TRUE ~ NA_real_  # Handle other cases, if any
+  ))
+
+data_discount_combined <- data_discount_combined %>%
+  mutate(response2 = case_when(
+    response == "left" ~ 1,
+    response == "right" ~ 0,
+    TRUE ~ NA_real_  # Handle other cases, if any
+  ))
+
+#is random effects justified?
+discount_model0 <- glm(choice2~1, data=data_discount_combined, family=binomial)
+discount_model1 <- glmer(choice2~(1|subject), data=data_discount_combined, family=binomial, control = glmerControl(optimizer = "bobyqa"))
+discount_model2 <- glmer(choice2~(1+condition|subject), data=data_discount_combined, family=binomial, , control = glmerControl(optimizer = "bobyqa"))
+
+AIC(logLik(discount_model0))
+AIC(logLik(discount_model1))
+AIC(logLik(discount_model2))
+
+# AIC of random effects model smaller, hence better
+```
+
+add rel. dwell time difference impatient - patient option
+```{r}
+data_discount_combined$dwelldiff_value_rel <- 0
+for (i in 1:nrow(data_discount_combined)){
+  if((data_discount_combined$choice2[i]==1) && (data_discount_combined$response2[i]==1)) { # value & left
+    data_discount_combined$dwelldiff_value_rel[i] = (data_discount_combined$valueleft_time[i]+data_discount_combined$timeleft_time[i])/(data_discount_combined$valueright_time[i]+data_discount_combined$timeright_time[i]+data_discount_combined$valueleft_time[i]+data_discount_combined$timeleft_time[i])
+  }else if ((data_discount_combined$choice2[i]==1) && (data_discount_combined$response2[i]==0)) { # value & right
+    data_discount_combined$dwelldiff_value_rel[i] = (data_discount_combined$valueright_time[i]+data_discount_combined$timeright_time[i])/(data_discount_combined$valueleft_time[i]+data_discount_combined$timeleft_time[i]+data_discount_combined$valueright_time[i]+data_discount_combined$timeright_time[i])
+  }else if ((data_discount_combined$choice2[i]==0) && (data_discount_combined$response2[i]==1)) { # time & left
+    data_discount_combined$dwelldiff_value_rel[i] = (data_discount_combined$valueright_time[i]+data_discount_combined$timeright_time[i])/(data_discount_combined$valueleft_time[i]+data_discount_combined$timeleft_time[i]+data_discount_combined$valueright_time[i]+data_discount_combined$timeright_time[i])
+  }else if ((data_discount_combined$choice2[i]==0) && (data_discount_combined$response2[i]==0)) { # time & right
+    data_discount_combined$dwelldiff_value_rel[i] = (data_discount_combined$valueleft_time[i]+data_discount_combined$timeleft_time[i])/(data_discount_combined$valueright_time[i]+data_discount_combined$timeright_time[i]+data_discount_combined$valueleft_time[i]+data_discount_combined$timeleft_time[i])
+  }
+}
+
+data_discount_combined <- subset(data_discount_combined,dwelldiff_value_rel!='NaN')
+```
+
+#### 2.3.2 Choice Model
+```{r}
+discount_model3 <- glmer(choice2~condition + scale(dwelldiff_value_rel) + (1+condition|subject), data=data_discount_combined, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+discount_model4 <- glmer(choice2~condition + scale(dwelldiff_value_rel) + scale(rel_dwelldiff_value) + BMI_cent + age_cent + condition * age_cent + scale(rel_dwelldiff_value) * BMI_cent + scale(rel_dwelldiff_value) * age_cent  +    (1+condition|subject), data=data_discount_combined, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+discount_model5 <- glmer(choice2~condition + scale(dwelldiff_value_rel) + scale(rel_dwelldiff_value) + BMI_cent + age_cent + scale(PA_change) + scale(NA_change)+ scale(hs_change) + scale(external) + scale(emotional) + scale(restricted) + scale(dwelldiff_value_rel) * scale(restricted) + (1+condition|subject), data=data_discount_combined, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
+summary(discount_model3)
+summary(discount_model4)
+summary(discount_model5)
+
+anova(discount_model3, discount_model4)
+```
+
+#### 2.3.3 Response Time Model
+```{r}
+discount_RTmodel0 <- glm(RT/1000~1, data=data_discount_combined,family=Gamma(link="identity"))
+discount_RTmodel1 <- glmer(RT/1000~(1|subject), data=data_discount_combined,family=Gamma(link="identity"))
+discount_RTmodel2 <- glmer(RT/1000~(1+condition|subject), data=data_discount_combined,family=Gamma(link="identity"))
+aic_glm <- AIC(logLik(discount_RTmodel0))
+aic_glmer <- AIC(logLik(discount_RTmodel1))
+aic_glmer2 <- AIC(logLik(discount_RTmodel2))
+aic_glm
+aic_glmer
+aic_glmer2
+
+discount_modelRT3 <- glmer(RT/1000~condition + choice2 * scale(dwelldiff_value_rel) + (1+condition|subject), data=data_discount_combined, family=Gamma(link="identity"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+discount_modelRT4 <- glmer(RT/1000~condition + choice2 + scale(dwelldiff_value_rel) + scale(rel_dwelldiff_value) + BMI_cent + age_cent + choice2 * scale(dwelldiff_value_rel)  + condition * age_cent + scale(rel_dwelldiff_value) * BMI_cent + scale(rel_dwelldiff_value) * age_cent  +    (1+condition|subject), data=data_discount_combined, family=Gamma(link="identity"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+summary(discount_modelRT3)
+summary(discount_modelRT4)
+
+anova(discount_modelRT3, discount_modelRT4)
+
+```
+
+
+##### Quantify effect of hunger 
+```{r}
+# Extract the fixed effects
+fixed_effects_discount <- fixef(discount_model3)
+
+# Extract the random effects for each subject
+random_effects_discount <- ranef(discount_model3)$subject
+
+# Extract the fixed effect for `condition`
+fixed_condition_discount <- fixed_effects_discount["conditionsated"]
+
+# Extract the random slope for `condition`
+random_condition_discount <- ranef(discount_model3)$subject[,"conditionsated"]
+
+# Subject-specific coefficients for `condition`
+subject_specific_condition_discount <- fixed_condition_discount + random_condition_discount
+
+subject_specific_dd <- data.frame(
+  subject = rownames(random_effects_discount),
+  condition_effect = subject_specific_condition_discount
+)
+
+discount_plot<-ggplot(subject_specific_dd, aes(x = "", y = condition_effect)) +
+  geom_violin(trim = FALSE, color="orange", fill="orange", alpha=0.3) +
+  geom_jitter(width = 0.2, color="orange") +
+  geom_hline(yintercept = fixed_condition, color = "orange", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "black", linetype = "solid") +
+  myTheme +
+  labs(title = "Distribution of Subject-Specific Coefficients for Sated Relative to Hungry Condition Effect",
+       x = "Condition",
+       y ="Coefficient (Condition Sated)") +
+  myTheme
+discount_plot
+```
+
+## 5 "Spill over" Effect
+1) Common graph
+```{r}
+# Combining data frames
+subject_specific_df$conditiontype <- "food"
+subject_specific_ds$conditiontype <- "social"
+subject_specific_dd$conditiontype <- "discount"
+
+# Ensure the color and jitter values are named for merging
+subject_specific_df <- subject_specific_df %>% 
+  mutate(colour = "purple", fill = "purple", fixed_effect = fixed_condition)
+subject_specific_ds <- subject_specific_ds %>% 
+  mutate(colour = "pink", fill = "pink", fixed_effect = fixed_condition_social)
+subject_specific_dd <- subject_specific_dd %>% 
+  mutate(colour = "orange", fill = "orange", fixed_effect = fixed_condition_discount)
+
+# Combine all three data frames into one
+combined_df <- bind_rows(subject_specific_ds, subject_specific_df, subject_specific_dd)
+
+# Set the order of the condition types
+combined_df$conditiontype <- factor(combined_df$conditiontype, levels = c("food", "social", "discount"))
+
+mean_values <- combined_df %>% 
+  group_by(conditiontype) %>% 
+  summarize(mean_coefficient = mean(condition_effect),na.rm = TRUE)
+
+# Create the combined violin plot with mean lines for each condition type
+combined_plot <- ggplot(combined_df, aes(x = conditiontype, y = condition_effect)) +
+  geom_violin(aes(color = colour, fill = fill), trim = FALSE, alpha = 0.3) +
+  geom_jitter(aes(color = colour), width = 0.2, height=0) +
+  geom_hline(yintercept = 0, color = "black", linetype = "solid") +
+  scale_color_identity() + 
+  scale_fill_identity() +
+  myTheme +
+  labs(title = "Subject-Specific Coefficients for Different Conditions",
+       x = "Condition Type",
+       y = "Coefficient (Condition Sated)") +
+  myTheme +
+  stat_summary(fun = mean, geom = "crossbar", color = c("purple","pink", "orange"), show.legend = FALSE)+
+  geom_text(data = mean_values, aes(x = as.numeric(conditiontype), y = 2, label = round(mean_coefficient, digits = 2)), vjust = -1)
+  #geom_path(aes(group = subject, color = "grey", alpha=0.2), alpha = 0.5, size=0.5)
+
+# Print the plot
+print(combined_plot)
+
+ggsave("spillover.png", combined_plot)
+
+```
+
+We do not observe this so called "spill-over effect". While the mean coefficients across tasks are similar, the social and discounting task do not reach significance, due to its spread. It seems therefore that the effect of hungerstate  across choice domains strongly depends on the individual and possible other latent variables are at play. 
+
+2) Correlate the effects on a subject level, idea People who are stronger affected in food domain may also be more affected in a different domain?
+```{r}
+# Transform the data frame into a wide format
+library(tidyr)
+wide_df <- combined_df %>%
+  select(subject, conditiontype, condition_effect) %>%
+  pivot_wider(names_from = conditiontype, values_from = condition_effect, names_prefix = "effect_")
+
+wide_df <- na.omit(wide_df)
+
+scatter_plot <- ggplot(wide_df, aes(x = effect_food, y = effect_social)) +
+  geom_point(color = "pink3")+
+  geom_smooth(method = "lm", se = FALSE, color = "pink3") +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype="dashed") +
+  labs(title = "", x = "Effect Food", y = "Effect Social")+ 
+  xlim(min(wide_df$effect_social), max(wide_df$effect_social))+
+  ylim(min(wide_df$effect_social), max(wide_df$effect_social))+
+  myTheme
+scatter_plot
+
+scatter_plot2 <- ggplot(wide_df, aes(x = effect_food, y = effect_discount)) +
+  geom_point(color = "orange3")+
+  geom_smooth(method = "lm", se = FALSE, color = "orange3") +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype="dashed") +
+  labs(title = "", x = "Effect Food", y = "Effect Discount")+ 
+  xlim(min(wide_df$effect_discount), max(wide_df$effect_discount))+
+  ylim(min(wide_df$effect_discount), max(wide_df$effect_discount))+
+  myTheme
+
+scatter_plot2
+
+correlation <- cor.test(wide_df$effect_food, wide_df$effect_social)
+correlation2 <- cor.test(wide_df$effect_food, wide_df$effect_discount)
+correlation
+correlation2
+
+ggsave("food_social_corr.png", scatter_plot)
+ggsave("food_discount_corr.png.png", scatter_plot2)
+
+# also check correlation social discount!
+```
+
+People who change their food choices more strongly under hunger, also seem to change their discounting decisions, while there is no relation to social choices.
+
