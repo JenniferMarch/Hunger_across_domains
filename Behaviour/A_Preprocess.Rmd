@@ -840,7 +840,7 @@ data_social_hungry_sub <- data_social_hungry %>%
   group_by(subject) %>% 
   summarize(rt_mean = mean(RT), sd_rt=sd(RT))
 
-df_hungry <- merge(data_social_hungry, data_hungry_sub, by = "subject", all.x = TRUE)
+df_hungry <- merge(data_social_hungry, data_social_hungry_sub, by = "subject", all.x = TRUE)
 data_social_hungry <- df_hungry %>%
   dplyr::filter(RT <=rt_mean + 4 * sd_rt)
 
@@ -916,7 +916,7 @@ data_discount_hungry_sub <- data_discount_hungry %>%
   group_by(subject) %>% 
   summarize(rt_mean = mean(RT), sd_rt=sd(RT))
 
-df_hungry <- merge(data_discount_hungry, data_hungry_sub, by = "subject", all.x = TRUE)
+df_hungry <- merge(data_discount_hungry, data_discount_hungry_sub, by = "subject", all.x = TRUE)
 data_discount_hungry <- df_hungry %>%
   dplyr::filter(RT <=rt_mean + 4 * sd_rt)
 
