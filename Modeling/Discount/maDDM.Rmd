@@ -123,8 +123,8 @@ histGran <- (-300:300)/150
 datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
 # Plot using ggplot2
 amount_weight1<-ggplot(datatw, aes(x = weight1_S)) +
-  geom_histogram(binwidth = 1/850, fill = "cornflowerblue", alpha = 0.5, color = "black") +
-  geom_histogram(aes(x = weight1_H), binwidth = 1/850, fill = "gold", alpha = 0.5, color = "black") +
+  geom_histogram(binwidth = 1/100, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weight1_H), binwidth = 1/100, fill = "gold", alpha = 0.5, color = "black") +
   labs(x = "Amount Weight", y = "Frequency") +
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   ylim(0, 5000)+
