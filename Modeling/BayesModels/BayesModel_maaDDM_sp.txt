@@ -17,7 +17,7 @@ model{
 
 	#Group Priors: effect of hunger
 	mu_bound_H ~ dnorm(0,1)
-	sigma_bound_H ~ norm(0,1)I(0,)
+	sigma_bound_H ~ dnorm(0,1)I(0,)
 	mu_ndt_H ~ dnorm(0,1)
 	sigma_ndt_H ~ dnorm(0,1)I(0,)
 	mu_drift_H ~ dnorm(0,1/2)
