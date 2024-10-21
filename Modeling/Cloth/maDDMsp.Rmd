@@ -1,0 +1,261 @@
+---
+title: "maDDMsp"
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
+date: "3/25/2024"
+output: html_document
+---
+
+# General Info
+
+This script contains all the models tested in our manuscript (https://osf.io/preprints/psyarxiv/wvfnb). It requires JAGS. The script is structured s follows:
+
+1. **Preparation:** loading libraries and load workspace
+2. **Multi-attribute DDM with starting poing bias:** Function, Estimate DDMsp, Test Parameters and some graphs (corresponds to DDMsp)
+
+# 1 Preparations
+## 1.1 Load Libraries
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+#if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(rtdists)
+library(dfoptim)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library(tibble)
+library(readr)
+pacman::p_load(tidyverse, ez)
+#parallel computing stuff
+library(parallel)
+library(doParallel)
+library(foreach)
+numCores <- detectCores()
+registerDoParallel(cores=numCores)
+#JAGS packages
+library(R2jags) #should be put at the start but keep it here for the moment...
+library(rtdists) #to be on the safe side when loading workspace (and not executing the first chunk above)
+```
+
+## 1.2 Create Theme for Plots
+```{r}
+library(ggplot2)
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+## 1.3 Load workspace 
+```{r}
+# Load data
+load("data_discount_prep.RData")
+```
+
+# 2 Multiattribute DDM +SP
+## 2.1 Estimate maDDM_sp_2w with hierarchical Bayesian modeling (JAGS) - estimation
+```{r}
+# get data and initial values together and specify the model
+ddmData <- list('N'=N,'S'=S,'P'=P,'H'=H,'attribute1A'=valueA,'attribute1B'=valueB,'attribute2A'=timeA2,'attribute2B'=timeB2,'RT'=RT)
+
+#starting values
+nChains <- 8
+
+T1<-Sys.time()
+ddmJAGS_sp<- jags.parallel(ddmData,inits = NULL,
+                    parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1','mu_sp','sigma_sp',
+                                           'mu_bound_H','sigma_bound_H','mu_ndt_H','sigma_ndt_H',
+                                           'mu_drift_H','sigma_drift_H','mu_weight1_H','sigma_weight1_H','mu_sp_H','sigma_sp_H',
+                                           'bound','ndt','drift','weight1','sp',
+                                           'bound_H','ndt_H','weight1_H','weight2_H','sp_H'),
+                    model.file = "BayesModel_maDDM_sp.txt",working.directory = 'BayesModels',
+                    n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, DIC = TRUE,jags.module = c("glm","dic","wiener"))
+T2<-Sys.time() #T2-T1
+
+# check convergence and fit
+ddmRhats <- ddmJAGS_sp$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+ddmJAGS_sp$BUGSoutput$DIC
+
+save.image(file="DDMsp_discount2.RData")
+```
+
+## 2.2 maDDM_sp_2w: check parameters (group posteriors)
+```{r}
+#get group parameter estimates in transformed form 
+boundSep_S <- log(1+exp(ddmJAGS_sp$BUGSoutput$sims.list$mu_bound))
+boundSep_H <- log(1+exp(ddmJAGS_sp$BUGSoutput$sims.list$mu_bound+ddmJAGS_sp$BUGSoutput$sims.list$mu_bound_H))
+boundSep_delta <- ddmJAGS_sp$BUGSoutput$sims.list$mu_bound_H
+
+ndt_S <- log(1+exp(ddmJAGS_sp$BUGSoutput$sims.list$mu_ndt))
+ndt_H <- log(1+exp(ddmJAGS_sp$BUGSoutput$sims.list$mu_ndt+ddmJAGS_sp$BUGSoutput$sims.list$mu_ndt_H))
+ndt_delta <- ddmJAGS_sp$BUGSoutput$sims.list$mu_ndt_H
+
+weight1_S <- pnorm(ddmJAGS_sp$BUGSoutput$sims.list$mu_weight1)
+weight1_H <- pnorm(ddmJAGS_sp$BUGSoutput$sims.list$mu_weight1+ddmJAGS_sp$BUGSoutput$sims.list$mu_weight1_H)
+weight1_delta <- ddmJAGS_sp$BUGSoutput$sims.list$mu_weight1_H
+
+drift_S <- log(1+exp(ddmJAGS_sp$BUGSoutput$sims.list$mu_drift))
+drift_H <- log(1+exp(ddmJAGS_sp$BUGSoutput$sims.list$mu_drift+ddmJAGS_sp$BUGSoutput$sims.list$mu_drift_H))
+drift_delta <- ddmJAGS_sp$BUGSoutput$sims.list$mu_drift_H
+
+sp_S <- pnorm(ddmJAGS_sp$BUGSoutput$sims.list$mu_sp)
+sp_H <- pnorm(ddmJAGS_sp$BUGSoutput$sims.list$mu_sp+ddmJAGS_sp$BUGSoutput$sims.list$mu_sp_H)
+sp_delta <- ddmJAGS_sp$BUGSoutput$sims.list$mu_sp_H
+
+##plot each parameter with memory and stress effects
+
+## PLOT 
+
+#1) Amount weight 
+histGran <- (-300:300)/150
+# Create a data frame
+datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
+# Plot using ggplot2
+tasteweight1<-ggplot(datatw, aes(x = weight1_S)) +
+  geom_histogram(binwidth = 1/80, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weight1_H), binwidth = 1/80, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Amount Weight", y = "Frequency") +
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  ylim(0, 5000)+
+  myTheme
+# effect of hunger 
+data_deltatw <- data.frame(weight1_delta = weight1_delta)
+HDI_tw <- quantile(weight1_delta,c(.025,.975))
+# Plot using ggplot2
+tasteweight2<-ggplot(data_deltatw, aes(x = weight1_delta)) +
+  geom_histogram(binwidth = 1/20, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_tw, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+# 2) Scaling
+histGran <- (-300:300)/150
+# Create a data frame
+datascale <- data.frame(drift_S = drift_S, drift_H = drift_H)
+# Plot using ggplot2
+drift1<-ggplot(datascale, aes(x = drift_S)) +
+  geom_histogram(binwidth = 1/170, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = drift_H), binwidth = 1/170, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Drift Scaling", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltascale <- data.frame(drift_delta = drift_delta)
+HDI_drift <- quantile(drift_delta,c(.025,.975))
+# Plot using ggplot2
+drift2<-ggplot(data_deltascale, aes(x = drift_delta)) +
+  geom_histogram(binwidth = 1/60, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_drift, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+#3) Boundary seperation
+histGran <- (-300:300)/150
+# Create a data frame
+databound <- data.frame(boundSep_S = boundSep_S, boundSep_H = boundSep_H)
+# Plot using ggplot2
+bound1<-ggplot(databound, aes(x = boundSep_S)) +
+  geom_histogram(binwidth = 1/30, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = boundSep_H), binwidth = 1/30, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Boundary Seperation", y = "Frequency") +
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  ylim(0, 5000)+
+  myTheme
+# effect of hunger 
+data_deltabound <- data.frame(boundSep_delta = boundSep_delta)
+HDI_bound <- quantile(boundSep_delta,c(.025,.975))
+# Plot using ggplot2
+bound2<-ggplot(data_deltabound, aes(x = boundSep_delta)) +
+  geom_histogram(binwidth = 1/40, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_bound, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+# 4) nDT
+histGran <- (-300:300)/150
+# Create a data frame
+datanDT <- data.frame(ndt_S = ndt_S, ndt_H = ndt_H)
+# Plot using ggplot2
+nDT1<-ggplot(datanDT, aes(x = ndt_S)) +
+  geom_histogram(binwidth = 1/150, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = ndt_H), binwidth = 1/150, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Non-Decision Time", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltandt <- data.frame(ndt_delta = ndt_delta)
+HDI_ndt <- quantile(ndt_delta,c(.025,.975))
+# Plot using ggplot2
+nDT2<-ggplot(data_deltandt, aes(x = ndt_delta)) +
+  geom_histogram(binwidth = 1/110, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_ndt, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+# 3) Starting Point
+histGran <- (-300:300)/150
+# Create a data frame
+datasp <- data.frame(sp_S = sp_S, sp_H = sp_H)
+# Plot using ggplot2
+startpoint1<-ggplot(datasp, aes(x = sp_S)) +
+  geom_histogram(binwidth = 1/200, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = sp_H), binwidth = 1/200, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Starting point Bias", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+HDI_sps <- quantile(sp_S,c(.025,.975))
+HDI_sph <- quantile(sp_H,c(.025,.975))
+
+# effect of hunger 
+data_deltasp <- data.frame(sp_delta = sp_delta)
+HDI_sp <- quantile(sp_delta,c(.025,.975))
+# Plot using ggplot2
+startpoint2<-ggplot(data_deltasp, aes(x = sp_delta)) +
+  geom_histogram(binwidth = 1/100, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_sp, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  #xlim(-0.08, 0.05)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+library(cowplot)
+# Arrange the plots side by side
+combined_plot_ddm2 <- plot_grid(tasteweight1, tasteweight2, drift1, drift2, nDT1, nDT2, bound1, bound2, startpoint1, startpoint2, labels = c("a", "", "b", "", "c", "", "d", "", "e", ""), label_size = 20, ncol = 4, align = "h", column_spacing = unit(c(0, 0, 2, 0, 0), "cm"))
+combined_plot_ddm2
+# Save the combined plot as a PNG file
+ggsave("ddmsp_discount.png", combined_plot_ddm2, width = 16, height = 12)
+```
+
