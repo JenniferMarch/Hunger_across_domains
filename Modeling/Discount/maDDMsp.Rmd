@@ -42,7 +42,27 @@ library(R2jags) #should be put at the start but keep it here for the moment...
 library(rtdists) #to be on the safe side when loading workspace (and not executing the first chunk above)
 ```
 
-## 1.2 Load workspace (if required)
+## 1.2 Create Theme for Plots
+```{r}
+library(ggplot2)
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+## 1.3 Load workspace 
 ```{r}
 # Load data
 load("data_discount_prep.RData")
@@ -110,8 +130,8 @@ histGran <- (-300:300)/150
 datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
 # Plot using ggplot2
 tasteweight1<-ggplot(datatw, aes(x = weight1_S)) +
-  geom_histogram(binwidth = 1/400, fill = "cornflowerblue", alpha = 0.5, color = "black") +
-  geom_histogram(aes(x = weight1_H), binwidth = 1/400, fill = "gold", alpha = 0.5, color = "black") +
+  geom_histogram(binwidth = 1/80, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weight1_H), binwidth = 1/80, fill = "gold", alpha = 0.5, color = "black") +
   labs(x = "Amount Weight", y = "Frequency") +
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   ylim(0, 5000)+
@@ -121,7 +141,7 @@ data_deltatw <- data.frame(weight1_delta = weight1_delta)
 HDI_tw <- quantile(weight1_delta,c(.025,.975))
 # Plot using ggplot2
 tasteweight2<-ggplot(data_deltatw, aes(x = weight1_delta)) +
-  geom_histogram(binwidth = 1/10, fill = "grey", alpha = 0.5, color = "black") +
+  geom_histogram(binwidth = 1/20, fill = "grey", alpha = 0.5, color = "black") +
   geom_vline(xintercept = 0, color = "red", size = 1.5) +
   geom_vline(xintercept = HDI_tw, color = "black", size = 1, linetype = "dashed") +
   ylim(0, 5000)+
@@ -170,7 +190,7 @@ data_deltabound <- data.frame(boundSep_delta = boundSep_delta)
 HDI_bound <- quantile(boundSep_delta,c(.025,.975))
 # Plot using ggplot2
 bound2<-ggplot(data_deltabound, aes(x = boundSep_delta)) +
-  geom_histogram(binwidth = 1/50, fill = "grey", alpha = 0.5, color = "black") +
+  geom_histogram(binwidth = 1/40, fill = "grey", alpha = 0.5, color = "black") +
   geom_vline(xintercept = 0, color = "red", size = 1.5) +
   geom_vline(xintercept = HDI_bound, color = "black", size = 1, linetype = "dashed") +
   ylim(0, 5000)+
