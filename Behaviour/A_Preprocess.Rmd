@@ -5,9 +5,15 @@ date: "2024-10-07"
 ---
 ### Information
 This script creates combines questionnaire and experimental data, It calculates relevant control variables for the GLMMs and implements the preprocessing in line with our preregistration: https://osf.io/tmdw3 
-Ultimately, the script saves the dataframes used in behavioural and modeling analyses. 
+Ultimately, the script saves the dataframes used in behavioural and modeling analyses (in B_GLMMs.Rmd and things in Modeling folder). 
 
-Original xlsx and csv files can provided upon request. Variables collected but not considered in our analyses include: menstrual cycle (all information to estimate cycle), estimated last meal intake (what, how much and when) as well as usual brekfast routine (how often, what and when). All other variables are contained in the .RData files.
+Original xlsx and csv files can provided upon request. Variables collected but not considered in our analyses include: menstrual cycle (all information to estimate cycle), estimated last meal intake (what, how much and when) as well as usual breakfast routine (how often, what and when). All other variables are contained in the .RData files.
+
+### Variables
+```{r}
+# TBA
+
+```
 
 ### 1. Preparations
 ```{r}
@@ -185,7 +191,6 @@ for (singlefile in filelist) {
   }
 }
 ```
-
 
 ```{r}
 # for some stupid reason I did not save the food images and nutri scores in the long file so I will add them via subject and trial number from the short file
