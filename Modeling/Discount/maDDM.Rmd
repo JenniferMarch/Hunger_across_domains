@@ -117,7 +117,7 @@ drift_H <- log(1+exp(ddmJAGS$BUGSoutput$sims.list$mu_drift+ddmJAGS$BUGSoutput$si
 drift_delta <- ddmJAGS$BUGSoutput$sims.list$mu_drift_H
 
 
-#1) self weight 
+#1) amount weight 
 histGran <- (-300:300)/150
 # Create a data frame
 datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
