@@ -93,7 +93,7 @@ for (singlefile in filelist) {
 
 ```
 
-#### b. Social
+#### 2.2. Social
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
 filelist <- list.files(path="data_social", pattern = ".csv", full.names = TRUE)
 
@@ -143,7 +143,7 @@ for (singlefile in filelist) {
 
 ```
 
-#### c. Discount
+#### 2.3. Discount
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
 filelist <- list.files(path="data_discount", pattern = ".csv", full.names = TRUE)
 
@@ -160,8 +160,8 @@ for (singlefile in filelist) {
   subject <- as.numeric(gsub("[^0-9]", "", singlefile))
   
   # Check file name pattern and read data accordingly
-  if (grepl("subh_", singlefile)) {
-    if (grepl("long", singlefile)) {
+  if (grepl("subh_", singlefile)) { #??
+    if (grepl("long", singlefile)) { #??
       vpfile <- suppressWarnings(read_csv(singlefile))
       vpfile$subject <- subject  # Add subject number as a column
       data_discount_hungry_long <- rbind(data_discount_hungry_long, vpfile)
@@ -189,6 +189,60 @@ for (singlefile in filelist) {
       data_discount_sated <- rbind(data_discount_sated, vpfile)
     }
   }
+}
+```
+
+#### 2.4. Clothing
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# data from https://osf.io/d7s6c/
+# choice: left option is chosen (0 or 1)
+# always keep the brand's logo on the top
+# data combines Philiastides et al., 2013 and Yang et al., 2023? (N = 20 + 31 -3)
+# Upleftval/ uprightval/ downleftval/downrightval: preferential ratings of the options at different positions
+# ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
+
+# Load the CSV file
+data_raw_clothing <- read.csv("../data/borlabel.csv")
+
+# Create empty dataframes for each category
+data_clothing <- tibble()
+data_clothing_long <- tibble()
+
+# Read in data for all participants in all conditions
+# summarize the dwell time for each attribute in each trial (so far the fixation times are stored separately within a trial)
+subjlist <- unique(data_raw_clothing$subj)
+for (k in subjlist) {
+  # Get the subject number from the file name
+  subject <- subjlist[k]
+  subdata <- data[data$subj == subject, ]
+  Ntrial <-  unique(subdata$trial)
+  
+  for (t in Ntrial) {
+    trial_data <- subdata[subdata$trial == t, ]
+    Nfix <-  unique(trial_data$fixnum)
+    
+    #list of variables
+    # note: ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
+    brandleft_fix <- sum(trial_data$roi == 1)
+    brandright_fix <- sum(trial_data$roi == 2)
+    valueleft_fix <- sum(trial_data$roi == 3)
+    valueright_fix <- sum(trial_data$roi == 4)
+    brandleft_time <- sum(trial_data$fixdur[trial_data$roi == 1])
+    brandright_time <- sum(trial_data$fixdur[trial_data$roi == 2])
+    valueleft_time <- sum(trial_data$fixdur[trial_data$roi == 3])
+    valueright_time <- sum(trial_data$fixdur[trial_data$roi == 4])
+    brand_left <- trial_data$upleftval
+    brand_right <- trial_data$uprightval
+    value_left <- trial_data$downleftval
+    value_right <- trial_data$downrightval
+    RT <- trial_data$rt
+    #choice <- 
+    response <- choice #1: left; 0: right
+    trial <- t
+    tempdata[t, ] <- c(subject, brandleft_fix, brandright_fix, valueleft_fix, valueright_fix, brandleft_time, brandright_time, valueleft_time, valueright_time, brand_left, brand_right, value_left, value_right)
+  }
+  data_clothing <- rbind(data_discount_sated, vpfile)
+  
 }
 ```
 
@@ -984,8 +1038,12 @@ data_discount_combined <- data_discount_combined %>%
 ```
 
 
+#### 4.4 Cloth
+```{r}
 
-#### 4.2 Add change scores in mood an HS
+```
+
+#### 4.5 Add change scores in mood an HS
 ```{r}
 add_change_scores <- function(data) {
   # Ensure the condition column is a factor
