@@ -35,7 +35,7 @@ library (ggplot2)
 library(tibble)
 library(rstatix)
 library(tidyverse)
-library(ez)
+library(ez) #
 library(lme4)
 library(lmerTest)
 
@@ -201,8 +201,9 @@ for (singlefile in filelist) {
 # Upleftval/ uprightval/ downleftval/downrightval: preferential ratings of the options at different positions
 # ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
 
-# Load the CSV file
-data_raw_clothing <- read.csv("../data/borlabel.csv")
+# Load the CSV file (sallabel N=48, borlabel N=48, socialadv N=61, socialdisadv N=20, foodrisk N=42, moneyrisk N=33)
+data_raw_clothing <- read.csv("../data/moneyrisk.csv") 
+
 
 # Create empty dataframes for each category
 data_clothing <- tibble()
@@ -211,13 +212,13 @@ data_clothing_long <- tibble()
 # Read in data for all participants in all conditions
 # summarize the dwell time for each attribute in each trial (so far the fixation times are stored separately within a trial)
 subjlist <- unique(data_raw_clothing$subj)
-for (k in subjlist) {
+for (subject in subjlist) {
   # Get the subject number from the file name
-  subject <- subjlist[k]
-  subdata <- data[data$subj == subject, ]
-  Ntrial <-  unique(subdata$trial)
+  subdata <- data_raw_clothing[data_raw_clothing$subj == subject, ]
+  triallist <- unique(subdata$trial)
+  Ntrial <- length(triallist)
   
-  for (t in Ntrial) {
+  for (t in triallist) {
     trial_data <- subdata[subdata$trial == t, ]
     Nfix <-  unique(trial_data$fixnum)
     
@@ -231,18 +232,34 @@ for (k in subjlist) {
     brandright_time <- sum(trial_data$fixdur[trial_data$roi == 2])
     valueleft_time <- sum(trial_data$fixdur[trial_data$roi == 3])
     valueright_time <- sum(trial_data$fixdur[trial_data$roi == 4])
-    brand_left <- trial_data$upleftval
-    brand_right <- trial_data$uprightval
-    value_left <- trial_data$downleftval
-    value_right <- trial_data$downrightval
-    RT <- trial_data$rt
-    #choice <- 
-    response <- choice #1: left; 0: right
-    trial <- t
-    tempdata[t, ] <- c(subject, brandleft_fix, brandright_fix, valueleft_fix, valueright_fix, brandleft_time, brandright_time, valueleft_time, valueright_time, brand_left, brand_right, value_left, value_right)
+    brand_left <- trial_data$upleftval[1]
+    brand_right <- trial_data$uprightval[1]
+    value_left <- trial_data$downleftval[1]
+    value_right <- trial_data$downrightval[1]
+    
+
+    # Create a new row as a data frame
+  new_row <- data.frame(
+    subject = subject,
+    trial = t,
+    response = trial_data$choice[1], #1: left; 0: right
+    RT =  trial_data$rt[1],
+    brandleft_fix = brandleft_fix,
+    brandright_fix = brandright_fix,
+    valueleft_fix = valueleft_fix,
+    valueright_fix = valueright_fix,
+    brandleft_time = brandleft_time,
+    brandright_time = brandright_time,
+    valueleft_time = valueleft_time,
+    valueright_time = valueright_time,
+    brand_left = brand_left,
+    brand_right = brand_right,
+    value_left = value_left,
+    value_right = value_right,
+    stringsAsFactors = FALSE  # Ensure character variables are not converted to factors
+  )
+     data_clothing <- rbind(data_clothing, new_row)
   }
-  data_clothing <- rbind(data_discount_sated, vpfile)
-  
 }
 ```
 
