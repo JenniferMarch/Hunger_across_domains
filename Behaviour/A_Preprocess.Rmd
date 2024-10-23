@@ -478,6 +478,7 @@ data_sated_long<-add_obj_cal(data_sated_long)
 
 #### 3.4 Value differences 
 ##### 3.4.1 Calculate mean score across condition
+[Descriptions]
 ```{r}
 data_hungry <- subset(data_hungry, subject %in% data_sated$subject)
 data_sated <- subset(data_sated, subject %in% data_hungry$subject)
@@ -485,50 +486,35 @@ data_sated <- subset(data_sated, subject %in% data_hungry$subject)
 data_hungry_long <- subset(data_hungry_long, subject %in% data_sated_long$subject)
 data_sated_long <- subset(data_sated_long, subject %in% data_hungry_long$subject)
 
+process_data <- function(data) {
+  data %>%
+    pivot_longer(cols = starts_with("food_"), names_to = "food_position", values_to = "food_img") %>%
+    mutate(
+      taste = case_when(
+        food_position == "food_left" ~ taste_left,
+        food_position == "food_right" ~ taste_right
+      ),
+      health = case_when(
+        food_position == "food_left" ~ health_left,
+        food_position == "food_right" ~ health_right
+      ),
+      pref = case_when(
+        food_position == "food_left" ~ pref_left,
+        food_position == "food_right" ~ pref_right
+      ),
+      cal = case_when(
+        food_position == "food_left" ~ cal_left,
+        food_position == "food_right" ~ cal_right
+      )
+    ) %>%
+    select(subject, food_img, taste, health, pref, cal) %>%
+    distinct()
+}
 
-rating_hungry<- data_hungry %>%
-  pivot_longer(cols = starts_with("food_"), names_to = "food_position", values_to = "food_img") %>%
-  mutate(
-    taste = case_when(
-      food_position == "food_left" ~ taste_left,
-      food_position == "food_right" ~ taste_right
-    ),
-    health = case_when(
-      food_position == "food_left" ~ health_left,
-      food_position == "food_right" ~ health_right
-    ), 
-    pref = case_when(
-      food_position == "food_left" ~ pref_left,
-      food_position == "food_right" ~ pref_right
-    ),
-    cal = case_when(
-      food_position == "food_left" ~ cal_left,
-      food_position == "food_right" ~ cal_right
-    )
-  ) %>%
-  select(subject, food_img, taste, health, pref, cal) %>%
-  distinct()
+# Apply the function to both datasets
+rating_hungry <- process_data(data_hungry)
+rating_sated <- process_data(data_sated)
 
-rating_sated<- data_sated %>%
-  pivot_longer(cols = starts_with("food_"), names_to = "food_position", values_to = "food_img") %>%
-  mutate(
-    taste = case_when(
-      food_position == "food_left" ~ taste_left,
-      food_position == "food_right" ~ taste_right
-    ),
-    health = case_when(
-      food_position == "food_left" ~ health_left,
-      food_position == "food_right" ~ health_right
-    ), 
-    pref = case_when(
-      food_position == "food_left" ~ pref_left,
-      food_position == "food_right" ~ pref_right
-    ),
-    cal = case_when(
-      food_position == "food_left" ~ cal_left,
-      food_position == "food_right" ~ cal_right
-    )
-  ) %>%
   select(subject, food_img, taste, health, pref, cal) %>%
   distinct()
 
