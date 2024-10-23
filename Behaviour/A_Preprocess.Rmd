@@ -194,7 +194,7 @@ for (singlefile in filelist) {
 
 #### 2.4. Clothing
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
-# data from https://osf.io/d7s6c/
+# data from https://osf.io/d7s6c/ and https://osf.io/f2urs/
 # choice: left option is chosen (0 or 1)
 # always keep the brand's logo on the top
 # data combines Philiastides et al., 2013 and Yang et al., 2023? (N = 20 + 31 -3)
@@ -202,8 +202,8 @@ for (singlefile in filelist) {
 # ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
 
 # Load the CSV file (sallabel N=48, borlabel N=48, socialadv N=61, socialdisadv N=20, foodrisk N=42, moneyrisk N=33)
-data_raw_clothing <- read.csv("../data/moneyrisk.csv") 
-
+# data_raw_clothing <- read.csv("../data/moneyrisk.csv") 
+load("../data/Brand_Data_Clean.RData")
 
 # Create empty dataframes for each category
 data_clothing <- tibble()
@@ -211,37 +211,56 @@ data_clothing_long <- tibble()
 
 # Read in data for all participants in all conditions
 # summarize the dwell time for each attribute in each trial (so far the fixation times are stored separately within a trial)
-subjlist <- unique(data_raw_clothing$subj)
+subjlist <- seq_along(brand_present_sub)
 for (subject in subjlist) {
   # Get the subject number from the file name
-  subdata <- data_raw_clothing[data_raw_clothing$subj == subject, ]
-  triallist <- unique(subdata$trial)
-  Ntrial <- length(triallist)
+  subdata <- brand_present_sub[[subject]]
+  Ntrial <- sum(subdata$fixnum == 1)
+  # Identify indices where fixnum == 1
+  indices <- which(subdata$fixnum == 1)
   
-  for (t in triallist) {
-    trial_data <- subdata[subdata$trial == t, ]
+  # Create a sequence of labels (1, 2, 3, etc.) of the same length as identified indices
+  labels <- seq_along(indices)
+  
+  # Assign these labels to a new column 'fixation_label'
+  subdata$trial <- NA  # Create a new column initialized with NA
+  subdata$trial[indices] <- labels  # Assign labels to the identified rows
+  
+  for (t in 1:Ntrial) {
+    if (t<Ntrial) {
+      trial_start <- which(subdata$trial == t)
+      trial_end <- which(subdata$trial == (t+1))-1
+    } else {
+      trial_start <- which(subdata$trial == t)
+      trial_end <- nrow(subdata)
+    }
+    trial_data <- subdata[trial_start:trial_end, ]
     Nfix <-  unique(trial_data$fixnum)
     
     #list of variables
     # note: ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
-    brandleft_fix <- sum(trial_data$roi == 1)
-    brandright_fix <- sum(trial_data$roi == 2)
-    valueleft_fix <- sum(trial_data$roi == 3)
-    valueright_fix <- sum(trial_data$roi == 4)
-    brandleft_time <- sum(trial_data$fixdur[trial_data$roi == 1])
-    brandright_time <- sum(trial_data$fixdur[trial_data$roi == 2])
-    valueleft_time <- sum(trial_data$fixdur[trial_data$roi == 3])
-    valueright_time <- sum(trial_data$fixdur[trial_data$roi == 4])
-    brand_left <- trial_data$upleftval[1]
-    brand_right <- trial_data$uprightval[1]
-    value_left <- trial_data$downleftval[1]
-    value_right <- trial_data$downrightval[1]
+        valueleft_fix <- sum(trial_data$roi == 1)
+    valueright_fix <- sum(trial_data$roi == 2)
+    brandleft_fix <- sum(trial_data$roi == 3)
+    brandright_fix <- sum(trial_data$roi == 4)
+    valueleft_time <- sum(trial_data$fixdur[trial_data$roi == 1])
+    valueright_time <- sum(trial_data$fixdur[trial_data$roi == 2])
+    brandleft_time <- sum(trial_data$fixdur[trial_data$roi == 3])
+    brandright_time <- sum(trial_data$fixdur[trial_data$roi == 4])
+    value_left <- trial_data$upleftval[1]
+    value_right <- trial_data$uprightval[1]
+    brand_left <- trial_data$downleftval[1]
+    brand_right <- trial_data$downrightval[1]
     
 
     # Create a new row as a data frame
   new_row <- data.frame(
     subject = subject,
     trial = t,
+    brand_left = brand_left,
+    brand_right = brand_right,
+    value_left = value_left,
+    value_right = value_right,
     response = trial_data$choice[1], #1: left; 0: right
     RT =  trial_data$rt[1],
     brandleft_fix = brandleft_fix,
@@ -252,10 +271,6 @@ for (subject in subjlist) {
     brandright_time = brandright_time,
     valueleft_time = valueleft_time,
     valueright_time = valueright_time,
-    brand_left = brand_left,
-    brand_right = brand_right,
-    value_left = value_left,
-    value_right = value_right,
     stringsAsFactors = FALSE  # Ensure character variables are not converted to factors
   )
      data_clothing <- rbind(data_clothing, new_row)
