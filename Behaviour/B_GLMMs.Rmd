@@ -59,7 +59,7 @@ myTheme <- theme(
 
 ### 1.3 Load Pre-processed Data
 ```{r}
-load('had_data.RData')
+load('../data/had_data.RData')
 ```
 
 ## 2 Behavioural Analyses
