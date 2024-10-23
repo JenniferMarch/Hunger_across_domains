@@ -193,91 +193,6 @@ for (singlefile in filelist) {
 }
 ```
 
-#### 2.4. Clothing
-```{r, message=FALSE, warning=FALSE, echo=FALSE}
-# data from https://osf.io/d7s6c/ and https://osf.io/f2urs/
-# choice: left option is chosen (0 or 1)
-# always keep the brand's logo on the top
-# data combines Philiastides et al., 2013 and Yang et al., 2023? (N = 20 + 31 -3)
-# Upleftval/ uprightval/ downleftval/downrightval: preferential ratings of the options at different positions
-# ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
-
-# Load the CSV file (sallabel N=48, borlabel N=48, socialadv N=61, socialdisadv N=20, foodrisk N=42, moneyrisk N=33)
-# data_raw_clothing <- read.csv("../data/moneyrisk.csv") 
-load("../data/Brand_Data_Clean.RData")
-
-# Create empty dataframes for each category
-data_clothing <- tibble()
-data_clothing_long <- tibble()
-
-# Read in data for all participants in all conditions
-# summarize the dwell time for each attribute in each trial (so far the fixation times are stored separately within a trial)
-subjlist <- seq_along(brand_present_sub)
-for (subject in subjlist) {
-  # Get the subject number from the file name
-  subdata <- brand_present_sub[[subject]]
-  Ntrial <- sum(subdata$fixnum == 1)
-  # Identify indices where fixnum == 1
-  indices <- which(subdata$fixnum == 1)
-  
-  # Create a sequence of labels (1, 2, 3, etc.) of the same length as identified indices
-  labels <- seq_along(indices)
-  
-  # Assign these labels to a new column 'fixation_label'
-  subdata$trial <- NA  # Create a new column initialized with NA
-  subdata$trial[indices] <- labels  # Assign labels to the identified rows
-  
-  for (t in 1:Ntrial) {
-    if (t<Ntrial) {
-      trial_start <- which(subdata$trial == t)
-      trial_end <- which(subdata$trial == (t+1))-1
-    } else {
-      trial_start <- which(subdata$trial == t)
-      trial_end <- nrow(subdata)
-    }
-    trial_data <- subdata[trial_start:trial_end, ]
-    Nfix <-  unique(trial_data$fixnum)
-    
-    #list of variables
-    # note: ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
-        valueleft_fix <- sum(trial_data$roi == 1)
-    valueright_fix <- sum(trial_data$roi == 2)
-    brandleft_fix <- sum(trial_data$roi == 3)
-    brandright_fix <- sum(trial_data$roi == 4)
-    valueleft_time <- sum(trial_data$fixdur[trial_data$roi == 1])
-    valueright_time <- sum(trial_data$fixdur[trial_data$roi == 2])
-    brandleft_time <- sum(trial_data$fixdur[trial_data$roi == 3])
-    brandright_time <- sum(trial_data$fixdur[trial_data$roi == 4])
-    value_left <- trial_data$upleftval[1]
-    value_right <- trial_data$uprightval[1]
-    brand_left <- trial_data$downleftval[1]
-    brand_right <- trial_data$downrightval[1]
-    
-
-    # Create a new row as a data frame
-  new_row <- data.frame(
-    subject = subject,
-    trial = t,
-    brand_left = brand_left,
-    brand_right = brand_right,
-    value_left = value_left,
-    value_right = value_right,
-    response = trial_data$choice[1], #1: left; 0: right
-    RT =  trial_data$rt[1],
-    brandleft_fix = brandleft_fix,
-    brandright_fix = brandright_fix,
-    valueleft_fix = valueleft_fix,
-    valueright_fix = valueright_fix,
-    brandleft_time = brandleft_time,
-    brandright_time = brandright_time,
-    valueleft_time = valueleft_time,
-    valueright_time = valueright_time,
-    stringsAsFactors = FALSE  # Ensure character variables are not converted to factors
-  )
-     data_clothing <- rbind(data_clothing, new_row)
-  }
-}
-```
 
 ```{r}
 # for some stupid reason I did not save the food images and nutri scores in the long file so I will add them via subject and trial number from the short file
@@ -1089,13 +1004,7 @@ data_discount_combined <- data_discount_combined %>%
 
 ```
 
-
-#### 4.4 Cloth
-```{r}
-
-```
-
-#### 4.5 Add change scores in mood an HS
+#### 4.4 Add change scores in mood an HS
 ```{r}
 add_change_scores <- function(data) {
   # Ensure the condition column is a factor
