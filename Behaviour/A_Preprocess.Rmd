@@ -12,6 +12,7 @@ Original xlsx and csv files can provided upon request. Variables collected but n
 ### Variables
 ```{r}
 # TBA
+# List of variables needed for the GLMM (and cognitive modeling)
 
 ```
 
@@ -612,6 +613,39 @@ add_vds <- function(data){
 data_hungry<-add_vds(data_hungry)
 data_sated<-add_vds(data_sated)
 
+```
+
+```{r}
+# UNFINISHED part (CCT): using add_vds4 function to add value differences of some measurements in social and discount task
+# variables: 
+# - difference in attributeA left vs. right: self (social), value (discount)
+# - difference in attributeB left vs. right: ngo (social), delayed time (discount)
+# - difference in dwell time
+# - dwell time difference chosen vs. unchosen: self (social), value (discount)
+# - dwell time difference chosen vs. unchosen: self (social), value (discount)
+
+# make sure data has the same variable names
+library(dplyr)
+
+tempData <- function(data){
+  newName <- c("upleft_value", "upright_value","downleft_value", "downright_value", "upleft_time", "upright_time","downleft_time", "downright_time")
+
+  tempData <- data %>%
+  rename(new_name = old_name)
+  }
+
+
+# Social
+
+
+print(data)
+
+add_vds4 <- function(data){
+  data$self_vd <- 0
+  data$ngo_vd <- 0
+  data$dwelldiff_chosen <- 0
+  data$rel_dwelldiff_chosen <- 0
+  data$rel_dwelldiff_self <- 0}
 ```
 
 ```{r}
