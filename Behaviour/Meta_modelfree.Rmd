@@ -252,9 +252,9 @@ Include:
 - proportion of dwell time
 
 ```{r}
-add_variables <- function(data){
+add_variables <- function(data, data_name){
   # inclusion criteria
-  validT <- data$RT > 0 & is.na(data$RT) == 0
+  validT <- data$RT > 250 & is.na(data$RT) == 0
   data <- data[validT, ]
   
   # vd of each attribute (left vs. right)
@@ -274,23 +274,38 @@ add_variables <- function(data){
   data$up_fixpropdiff <- data$fixProp1 - data$fixProp2 #(left vs. right)
   data$down_fixpropdiff <- data$fixProp3 - data$fixProp4 #(left vs. right)
   
+    # more information for model-based analysis
+    chooseR <- data$response == 0
+    data$RT_right <- data$RT
+    data$RT_right[chooseR] <- data$RT_right[chooseR]*-1
+    if (grepl("hungry", data_name, ignore.case = TRUE)) {
+      data$H <- rep(1,length(data$RT))
+    } else {
+      data$H <- rep(0,length(data$RT))
+    }
+    
+    
   
   # Initialize z_data
   z_data <- tibble()
-  
+  count <- 0
   # Get unique subjects
   subjlist <- unique(data$subject)
   for (s in subjlist){
     # Create a subset for the current subject
     subjdata <- data[data$subject == s, ]
     
+    # relabel subject numbers from 1 to N
+    count <- count +1
+    subjdata$P_subj <- rep(count,length(subjdata$RT))
+    
     # Calculate z-scores for each variable
-    subjdata$z_up_vd <- scale(subjdata$up_vd)
-    subjdata$z_down_vd <- scale(subjdata$down_vd)
-    subjdata$z_up_dwelldiff <- scale(subjdata$up_dwelldiff)
-    subjdata$z_down_dwelldiff <- scale(subjdata$down_dwelldiff)
-    subjdata$z_up_fixpropdiff <- scale(subjdata$up_fixpropdiff)
-    subjdata$z_down_fixpropdiff <- scale(subjdata$down_fixpropdiff)
+    subjdata$z_up_vd <- scale(subjdata$up_vd)[, 1]
+    subjdata$z_down_vd <- scale(subjdata$down_vd)[, 1]
+    subjdata$z_up_dwelldiff <- scale(subjdata$up_dwelldiff)[, 1]
+    subjdata$z_down_dwelldiff <- scale(subjdata$down_dwelldiff)[, 1]
+    subjdata$z_up_fixpropdiff <- scale(subjdata$up_fixpropdiff)[, 1]
+    subjdata$z_down_fixpropdiff <- scale(subjdata$down_fixpropdiff)[, 1]
     z_data <- rbind(z_data, subjdata)
   }
   return(z_data)
@@ -301,7 +316,7 @@ dataset_names <- c("org_data_food_sated", "org_data_food_hungry", "org_data_soci
 
 # Loop through the datasets and apply the add_variables function
 for (name in dataset_names) {
-  assign(name, add_variables(get(name)))
+  assign(name, add_variables(get(name), name))
 }
 
 # Save the modified datasets
@@ -454,9 +469,98 @@ for (data_name in data_interested) {
 print(coef_summary)
 ```
 
+# 7 organize data for the modeling
 ```{r}
-  save(data_combined, data_combined_neu, data_combined_want, data_social_combined, data_discount_combined, file="had_data.RData")
-  save(data_combined, data_sated_neu, data_hungry_neu, data_hungry_long, data_sated_long, file="food_modeling_data.RData")
-  save(data_social_combined, data_social_sated, data_social_hungry, data_social_hungry_long, data_social_sated_long, file="social_modeling_data.RData")
-  save(data_discount_combined, data_discount_sated, data_discount_hungry, data_discount_hungry_long, data_discount_sated_long, file="discount_modeling_data.RData")
+#loop over subjects to get the data and arrange it in the order needed
+# function to create tables for model-based analysis
+fittingDDMs <- function(data_name){
+  
+  # load data
+  data <- data
+# Check if "clothing" is in the name
+if (grepl("clothing", data_name, ignore.case = TRUE)) {
+  combineData <- "False"
+  cond <- 1
+} else {
+  combineData <- "True"
+  cond <- c(1,2) 
+}
+
+uID <- unique(data$subject)
+# attributeA and B (cloth: A = cloth, B = brand; food: A= food, B = neutrition; Social: A= self, B= ngo; Discount: A= value, B = time)
+upA <- c() 
+upB <- c() 
+downA <- c() 
+downB <- c()
+
+fixProp_upA <- c() 
+fixProp_upB <- c() 
+fixProp_downA <- c() 
+fixProp_downA <- c() 
+RT <- c() # in milli-second or second
+
+H <- c() #whether trial is hungry (1) or sated (0); not needed for clothing data
+P <- c() #participant number (from 1 till nsubj, so 1, 2, 3, 4, ..., nsubj)
+
+blubb <- matrix(NA,nrow=max(uID),ncol=2) # check if fixation props are correct
+dt <- 1/1000 # are you sure
+
+for (s in (unique(data$subject))){
+  
+  #loop over sessions (1 = hungry)
+  for (t in cond){
+    if (t == 1){ #session-specific stuff up front
+      sub <- data[data_discount_hungry$subject == s, ] #hungry
+      fixatedElement <- expanded_table_h[[which(unique(data_discount_hungry$subject)==s)]]
+    } else {
+      sub <- data_discount_sated[data_discount_sated$subject == s, ] #sated
+      fixatedElement <- expanded_table_s[[which(unique(data_discount_sated$subject)==s)]]
+    }
+    
+    #rearrange input data for value -time Choice
+    valueL <- (sub$value_left<sub$value_right) #whether impatient choice was left
+    response <- sub$response
+    response <- as.numeric(((response==("left"))&(valueL==T))|((response==("right"))&(valueL==F)))
+    rt_s <- sub$RT*dt
+    rt_s[response==0] = -rt_s[response==0] #dwiener function in JAGS wants "negative" rt if choice == 0
+    
+    valueA_s <- sub$value_left*(valueL==T)+sub$value_right*(valueL==F)
+    valueB_s <- sub$value_left*(valueL==F)+sub$value_right*(valueL==T)
+    timeA_s <- sub$time_left*(valueL==T)+sub$time_right*(valueL==F)
+    timeB_s <- sub$time_left*(valueL==F)+sub$time_right*(valueL==T)
+    
+    #prepare fixation data value - time
+    ntrialsi <- nrow(sub)
+    fixProps <- matrix(nrow = ntrialsi,ncol = 4)
+    for (n in 1:ntrialsi){
+      fEn <- fixatedElement[1:round(sub$RT[n]),n] #stream of fixated elements in current trials
+      fixProps[n,] <- c(sum(na.omit(fEn==1)),sum(na.omit(fEn==2)),sum(na.omit(fEn==3)),sum(na.omit(fEn==4)))/sum(na.omit(fEn>=1))
+    }
+    fixProps <- matrix(c(fixProps[,1]*(valueL==T)+fixProps[,2]*(valueL==F),fixProps[,1]*(valueL==F)+fixProps[,2]*(valueL==T),
+                         fixProps[,3]*(valueL==T)+fixProps[,4]*(valueL==F),fixProps[,3]*(valueL==F)+fixProps[,4]*(valueL==T)),ncol=4)
+    
+    
+    #fill in "all-subject" vectors for value time
+    valueA <- c(valueA,valueA_s)
+    valueB <- c(valueB,valueB_s)
+    timeA <- c(timeA,timeA_s)
+    timeB <- c(timeB,timeB_s)
+    
+    fixProp1 <- c(fixProp1,fixProps[,1])
+    fixProp2 <- c(fixProp2,fixProps[,2])
+    fixProp3 <- c(fixProp3,fixProps[,3])
+    fixProp4 <- c(fixProp4,fixProps[,4])
+    RT <- c(RT,rt_s)
+    H <- c(H,rep(t==1,length(rt_s)))
+    P <- c(P,rep(which(uID==s),length(rt_s)))
+    
+    
+  }
+}
+
+# List of datasets of interest
+data_interested <- list("data_clothing", "org_data_food_sated", "org_data_social_sated","org_data_discount_sated")
+for (data_name in data_interested) {
+
+  }  
 ```
