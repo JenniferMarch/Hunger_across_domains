@@ -5,4 +5,5 @@
 .csv
 .Rproj
 data/
-
+.DS_Store
+Modeling/.DS_Store
