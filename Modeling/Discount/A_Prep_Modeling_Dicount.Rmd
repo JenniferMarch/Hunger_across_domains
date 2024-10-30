@@ -7,7 +7,6 @@ date: "2024-10-09"
 # General Info
 This script contains loading data and preprocessing it for all modeling analyses. Crucially (and different to preprocesing in the behavioural analyses), we change the format of fixations in 2.3 and set some parameters in 3 this results in data_prep.RData
 
-Note: 09.10 Fixing preprocessing as I forgot to preprocess RT <250 for data_hungry long (also for social task. This should be fix the error); remember to update Git!
 
 ### 1 Preperations
 #### 1.1 Load Data
@@ -19,133 +18,28 @@ rm(list=ls())
 if(!is.null(dev.list())) dev.off()
 
 load("discount_modeling_data.RData")
-#load("food_data.RData")
 
-#check what happened to this one participant in the trial based file!
-data_discount_hungry_long <- subset(data_discount_hungry_long, subject %in% data_discount_sated$subject)
-data_discount_sated_long <- subset(data_discount_sated_long, subject %in% data_discount_hungry$subject)
-data_discount_hungry_long <- subset(data_discount_hungry_long, subject %in% data_discount_hungry$subject)
-data_discount_sated_long <- subset(data_discount_sated_long, subject %in% data_discount_sated$subject)
-
-data_discount_hungry<- subset(data_discount_hungry, subject %in% data_discount_hungry_long$subject)
-data_discount_sated <- subset(data_discount_sated, subject %in% data_discount_sated_long$subject)
-
-length(unique(data_discount_hungry$subject))
-length(unique(data_discount_sated_long$subject))
 ```
 
-
-## 2.3 Get fixations in correct format
-### 2.3.1 hungry
 ```{r}
-library(tidyr)
-library(dplyr)
-
-# Set seed for reproducibility
-set.seed(123)
-# Add random noise -necessary, bc otherwise some trials cannot be uniquely identified
-data_discount_hungry_long$fixdur <- data_discount_hungry_long$fixdur + runif(nrow(data_discount_hungry_long), 0.0001, 0.001)
-
-expanded_table_h <- vector("list", length(unique(data_discount_hungry_long$subject)))
-
-for (s in unique(data_discount_hungry_long$subject)) {
-  testsub <- data_discount_hungry_long[data_discount_hungry_long$subject == s, ]
-
-  fixatedElement <- testsub[c("trial", "fixElement", "fixdur")]
-
-  fixatedElement$totaldur <- fixatedElement$fixdur
-  for (i in 2:nrow(fixatedElement)) {
-    if (fixatedElement$trial[i] == fixatedElement$trial[i-1]) {
-      fixatedElement$totaldur[i] <- fixatedElement$fixdur[i] + fixatedElement$totaldur[i-1]
-    }
-  }
-
-  fixtab <- fixatedElement[c("trial", "fixElement", "totaldur")]
-
-  expanded_table_h[[s]] <- fixtab %>%
-    group_by(trial) %>%
-    fill(fixElement) %>%
-    mutate(totaldur = lag(totaldur, default = 0) + 1) %>%
-    fill(fixElement) %>%
-    complete(totaldur = 1:10000) %>%
-    fill(fixElement, .direction = "down") %>%
-    ungroup()
-
-  # Pivot the table to match the desired structure
-  expanded_table_h[[s]] <- pivot_wider(expanded_table_h[[s]], names_from = trial, values_from = fixElement)
-  expanded_table_h[[s]] <- expanded_table_h[[s]] %>%
-    dplyr::select(-1)
+# recoding function
+recode_fixation <- function(x) {
+  case_when(
+    x == 1 ~ 3,
+    x == 2 ~ 4,
+    x == 3 ~ 1,
+    x == 4 ~ 2,
+    TRUE ~ x  # Keep = unchanged
+  )
 }
-# Filter out empty tables from the list
-expanded_table_h <- expanded_table_h[sapply(expanded_table_h, length) > 0]
+
+# Apply to dataframes
+data_discount_hungry_long$fixElement2 <- recode_fixation(data_discount_hungry_long$fixElement)
+data_discount_sated_long$fixElement2 <- recode_fixation(data_discount_sated_long$fixElement)
 
 ```
 
-### 2.3.2 sated
-```{r}
-# Set seed for reproducibility
-set.seed(123)
-# Add random noise -necessary, bc otherwise some trials cannot be uniquely identified
-data_discount_sated_long$fixdur <- data_discount_sated_long$fixdur + runif(nrow(data_discount_sated_long), 0.0001, 0.001)
 
-expanded_table_s <- vector("list", length(unique(data_discount_sated_long$subject)))
-
-for (s in unique(data_discount_sated_long$subject)) {
-  testsub <- data_discount_sated_long[data_discount_sated_long$subject == s, ]
-
-  fixatedElement <- testsub[c("trial", "fixElement", "fixdur")]
-
-  fixatedElement$totaldur <- fixatedElement$fixdur
-  for (i in 2:nrow(fixatedElement)) {
-    if (fixatedElement$trial[i] == fixatedElement$trial[i-1]) {
-      fixatedElement$totaldur[i] <- fixatedElement$fixdur[i] + fixatedElement$totaldur[i-1]
-    }
-  }
-
-  fixtab <- fixatedElement[c("trial", "fixElement", "totaldur")]
-
-  expanded_table_s[[s]] <- fixtab %>%
-    group_by(trial) %>%
-    fill(fixElement) %>%
-    mutate(totaldur = lag(totaldur, default = 0) + 1) %>%
-    fill(fixElement) %>%
-    complete(totaldur = 1:10000) %>%
-    fill(fixElement, .direction = "down") %>%
-    ungroup()
-
-  # Pivot the table to match the desired structure
-  expanded_table_s[[s]] <- pivot_wider(expanded_table_s[[s]], names_from = trial, values_from = fixElement)
-  expanded_table_s[[s]] <- expanded_table_s[[s]] %>%
-    dplyr::select(-1)
-}
-# Filter out empty tables from the list
-expanded_table_s <- expanded_table_s[sapply(expanded_table_s, length) > 0]
-
-```
-
-## 2.4 Set some parameters
-```{r}
-# #loop over subjects for individual fits
-# nFits <- 10 #number of attempts to fit per subject
-# nsubj<- length(unique(data_discount_hungry$subject)) #doesn't matter whether taking hungry or sated 
-# ntrials<-190
-# dt <- 1/1000
-# paramNames <- c('boundarySeparation','driftScaling','ndt','weight','theta','phi')
-# nParams <- length(paramNames)
-# bestDevianceH <- rep(-2*ntrials*log(1e-5),nsubj) #start with a very high deviance)
-# allDeviancesH <- data.frame(matrix(bestDevianceH[1],nrow = nsubj,ncol = nFits))
-# bestParametersH <- data.frame(matrix(nrow = nsubj,ncol = nParams))
-# colnames(bestParametersH) <- paramNames
-# allParametersH <- array(NA,c(nFits,nParams,nsubj))
-# bestDevianceS <- bestDevianceH
-# allDeviancesS <- allDeviancesH
-# bestParametersS <- bestParametersH
-# allParametersS <- allParametersH
-# 
-```
-
-
-# 3 hierarchical Bayesian modeling (JAGS) - preparation
 ```{r}
 #loop over subjects to get the data and arrange it in the order needed
 uID <- unique(data_discount_hungry$subject)
@@ -173,10 +67,10 @@ for (s in (unique(data_discount_hungry$subject))){
   for (t in 1:2){
     if (t == 1){ #session-specific stuff up front
       sub <- data_discount_hungry[data_discount_hungry$subject == s, ] #hungry
-      fixatedElement <- expanded_table_h[[which(unique(data_discount_hungry$subject)==s)]]
+      #fixatedElement <- expanded_table_h[[which(unique(data_discount_hungry$subject)==s)]]
     } else {
       sub <- data_discount_sated[data_discount_sated$subject == s, ] #sated
-      fixatedElement <- expanded_table_s[[which(unique(data_discount_sated$subject)==s)]]
+      #fixatedElement <- expanded_table_s[[which(unique(data_discount_sated$subject)==s)]]
     }
     
     #rearrange input data for value -time Choice
@@ -190,16 +84,11 @@ for (s in (unique(data_discount_hungry$subject))){
     valueB_s <- sub$value_left*(valueL==F)+sub$value_right*(valueL==T)
     timeA_s <- sub$time_left*(valueL==T)+sub$time_right*(valueL==F)
     timeB_s <- sub$time_left*(valueL==F)+sub$time_right*(valueL==T)
-
-    #prepare fixation data value - time
-    ntrialsi <- nrow(sub)
-    fixProps <- matrix(nrow = ntrialsi,ncol = 4)
-    for (n in 1:ntrialsi){
-      fEn <- fixatedElement[1:round(sub$RT[n]),n] #stream of fixated elements in current trials
-      fixProps[n,] <- c(sum(na.omit(fEn==1)),sum(na.omit(fEn==2)),sum(na.omit(fEn==3)),sum(na.omit(fEn==4)))/sum(na.omit(fEn>=1))
-    }
-    fixProps <- matrix(c(fixProps[,1]*(valueL==T)+fixProps[,2]*(valueL==F),fixProps[,1]*(valueL==F)+fixProps[,2]*(valueL==T),
-                   fixProps[,3]*(valueL==T)+fixProps[,4]*(valueL==F),fixProps[,3]*(valueL==F)+fixProps[,4]*(valueL==T)),ncol=4)
+    
+    fixProp1_s <- sub$valueleft_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time) #value left
+    fixProp2_s <- sub$valueright_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#value right
+    fixProp3_s <- sub$timeleft_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#time left
+    fixProp4_s <- sub$timeright_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#time right
 
     
     #fill in "all-subject" vectors for value time
@@ -208,17 +97,15 @@ for (s in (unique(data_discount_hungry$subject))){
     timeA <- c(timeA,timeA_s)
     timeB <- c(timeB,timeB_s)
 
-    fixProp1 <- c(fixProp1,fixProps[,1])
-    fixProp2 <- c(fixProp2,fixProps[,2])
-    fixProp3 <- c(fixProp3,fixProps[,3])
-    fixProp4 <- c(fixProp4,fixProps[,4])
+    fixProp1 <- c(fixProp1,fixProp1_s)
+    fixProp2 <- c(fixProp2,fixProp2_s)
+    fixProp3 <- c(fixProp3,fixProp3_s)
+    fixProp4 <- c(fixProp4,fixProp4_s)
+    
     RT <- c(RT,rt_s)
     H <- c(H,rep(t==1,length(rt_s)))
     P <- c(P,rep(which(uID==s),length(rt_s)))
-    
-    bla=cor.test(as.numeric(fixProps[,1]-fixProps[,2]+fixProps[,3]-fixProps[,4]),as.numeric(rt_s>0))
-    blubb[s,t]=bla$estimate
-    
+
   }
 }
 
@@ -238,6 +125,8 @@ valueA <- valueA[validT]
 valueB <- valueB[validT]
 timeA <- timeA[validT]
 timeB <- timeB[validT]
+timeA2 <- timeA2[validT]
+timeB2 <- timeB2[validT]
 fixProp1 <- fixProp1[validT]
 fixProp2 <- fixProp2[validT]
 fixProp3 <- fixProp3[validT]
@@ -247,10 +136,7 @@ H <- H[validT]
 P <- P[validT]
 N <- length(RT)
 S <- length(unique(data_discount_hungry$subject))
-
 ```
-
-wondering if there is something wrong with the fixations... is
 
 ```{r}
 save.image('data_discount_prep.RData')
