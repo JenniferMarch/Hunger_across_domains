@@ -85,10 +85,13 @@ for (s in (unique(data_discount_hungry$subject))){
     timeA_s <- sub$time_left*(valueL==T)+sub$time_right*(valueL==F)
     timeB_s <- sub$time_left*(valueL==F)+sub$time_right*(valueL==T)
     
-    fixProp1_s <- sub$valueleft_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time) #value left
-    fixProp2_s <- sub$valueright_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#value right
-    fixProp3_s <- sub$timeleft_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#time left
-    fixProp4_s <- sub$timeright_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#time right
+    fixProp1_s <- sub$timeleft_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#time left
+    fixProp2_s <- sub$timeright_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#time right
+    fixProp3_s <- sub$valueleft_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time) #value left
+    fixProp4_s <- sub$valueright_time/(sub$valueleft_time+sub$valueright_time+sub$timeleft_time+sub$timeright_time)#value right
+    
+    fixProps <- matrix(c(fixProp1_s*(valueL==T)+fixProp2_s*(valueL==F),fixProp1_s*(valueL==F)+fixProp2_s*(valueL==T),
+                   fixProp3_s*(valueL==T)+fixProp4_s*(valueL==F),fixProp3_s*(valueL==F)+fixProp4_s*(valueL==T)),ncol=4)
 
     
     #fill in "all-subject" vectors for value time
@@ -97,10 +100,10 @@ for (s in (unique(data_discount_hungry$subject))){
     timeA <- c(timeA,timeA_s)
     timeB <- c(timeB,timeB_s)
 
-    fixProp1 <- c(fixProp1,fixProp1_s)
-    fixProp2 <- c(fixProp2,fixProp2_s)
-    fixProp3 <- c(fixProp3,fixProp3_s)
-    fixProp4 <- c(fixProp4,fixProp4_s)
+    fixProp1 <- c(fixProp1,fixProps[,1])
+    fixProp2 <- c(fixProp2,fixProps[,2])
+    fixProp3 <- c(fixProp3,fixProps[,3])
+    fixProp4 <- c(fixProp4,fixProps[,4])
     
     RT <- c(RT,rt_s)
     H <- c(H,rep(t==1,length(rt_s)))
