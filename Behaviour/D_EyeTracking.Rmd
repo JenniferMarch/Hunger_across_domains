@@ -46,8 +46,9 @@ load("discount_modeling_data.RData")
 
 
 ## 2 Social
-### 2.1 choose impulsive given dwell time
+### 2.1 choose selfish given dwell time option
 ```{r}
+library(dplyr)
 data_social_combined<-data_social_combined %>% 
   dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
 
@@ -97,6 +98,36 @@ ggsave("pchoice_dwelltime_social.png",  width = 8, height = 6, plot = last_plot(
 p1
 ```
 
+### 2.1 choose selfish given dwell time self
+```{r}
+# #recode ngo/value 
+data_social_combined$dwelldiff_time_self <- data_social_combined$selfleft_time+data_social_combined$selfright_time - data_social_combined$ngoleft_time+data_social_combined$ngoright_time
+
+```
+
+```{r}
+# Calculate the mean probability and standard error for each bin
+summary_self <- data_social_combined %>%
+  mutate(bin2 = cut(dwelldiff_time_self, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
+  group_by(bin2, condition) %>%
+  summarise(mean_prob_ngo = mean(choice2),
+            std_error_ngo = sd(choice2) / sqrt(n()))
+
+
+p2 <- ggplot(summary_self, aes(x = bin2, y = mean_prob_ngo, color = condition, group = condition)) +
+  geom_smooth(aes(y = mean_prob_ngo, fill = condition), method = "loess", span = 0.75, se = TRUE, linetype = "solid", alpha=0.3) +
+  scale_color_manual(values = c("gold", "cornflowerblue")) +
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
+  labs(x = "Dwell Time Difference Self vs NGO", y = "P(Selfish Choice)") +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
+  ylim(0,1)+
+  myTheme
+ggsave("pchoice_dwelltime_socialvsngo.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
+p2
+```
+
+
 ### 2.2 Plot more attention to ngo attribute under hunger?
 ```{r}
 data_social_combined$att_ngo<-0
@@ -144,14 +175,26 @@ att_self_s<-subset(combined_summary, condition =='sated')
 
 ttest<-t.test(att_self_h$mean_att_self, att_self_s$mean_att_self, paired=TRUE)
 ttest
-# .0057**
 
 effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
 # no difference
 ```
+```{r}
+combined_summary1 <- data_social_combined3 %>%
+  group_by(subject, condition) %>%
+  summarise(mean_att_self = mean(dwelldiff_time_self),
+            std_error = sd(dwelldiff_time_self) / sqrt(n()))
+
+
+att_self_h2<-subset(combined_summary1, condition =='hungry')
+att_self_s2<-subset(combined_summary1, condition =='sated')
+
+ttest<-t.test(att_self_h2$mean_att_self, att_self_s2$mean_att_self, paired=TRUE)
+ttest
+```
+
 
 ### 2.3 Lets take a look at first and last fixations
-Function to categorise where (location and content participants looked when)
 ```{r}
 nsubj <- length(unique(data_combined$subject))
 data_social_hungry_long_w0<-data_social_hungry_long
@@ -159,188 +202,222 @@ data_social_sated_long_w0<-data_social_hungry_long
 data_social_hungry_long<-subset(data_social_hungry_long, fixElement != 0)
 data_social_sated_long<-subset(data_social_sated_long, fixElement != 0)
 ```
-
-
+#### 2.3.1 Recode for position
 ```{r}
-calculate_fixation_proportions <- function(data,nsubj) {
-  
-  # Ensure the data is sorted by subject, trial, and RT
-  data <- data[order(data$subject, data$trial),]
-  
-  # Initialize vectors to store results
-  fixation_positions <- c(1, 2, 3, 4)
-  fixation_contents <- c("1_Left", "1_Right", "0_Left", "0_Right")
-  
-  # Calculate first and last fixations
-  results <- data %>%
-    group_by(subject, trial) %>%
-    summarize(
-      first_fix = first(fixElement),
-      last_fix = last(fixElement),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      first_content = case_when(
-        subject %% 2 == 0 & first_fix == 1 ~ "1_Left",
-        subject %% 2 == 0 & first_fix == 2 ~ "1_Right",
-        subject %% 2 == 0 & first_fix == 3 ~ "0_Left",
-        subject %% 2 == 0 & first_fix == 4 ~ "0_Right",
-        subject %% 2 == 1 & first_fix == 1 ~ "0_Left",
-        subject %% 2 == 1 & first_fix == 2 ~ "0_Right",
-        subject %% 2 == 1 & first_fix == 3 ~ "1_Left",
-        subject %% 2 == 1 & first_fix == 4 ~ "1_Right"
-      ),
-      last_content = case_when(
-        subject %% 2 == 0 & last_fix == 1 ~ "1_Left",
-        subject %% 2 == 0 & last_fix == 2 ~ "1_Right",
-        subject %% 2 == 0 & last_fix == 3 ~ "0_Left",
-        subject %% 2 == 0 & last_fix == 4 ~ "0_Right",
-        subject %% 2 == 1 & last_fix == 1 ~ "0_Left",
-        subject %% 2 == 1 & last_fix == 2 ~ "0_Right",
-        subject %% 2 == 1 & last_fix == 3 ~ "1_Left",
-        subject %% 2 == 1 & last_fix == 4 ~ "1_Right"
-      )
-    )
-  
-  calculate_prop_and_se <- function(data, column, values) {
-    sapply(values, function(x) {
-      prop <- sum(data[[column]] == x) / nrow(results)
-      se <- sqrt(prop * (1 - prop) / nsubj)
-      c(proportion = prop, se = se)
-    })
-  }
-  
-  first_fix_stats <- calculate_prop_and_se(results, "first_fix", fixation_positions)
-  last_fix_stats <- calculate_prop_and_se(results, "last_fix", fixation_positions)
-  first_content_stats <- calculate_prop_and_se(results, "first_content", fixation_contents)
-  last_content_stats <- calculate_prop_and_se(results, "last_content", fixation_contents)
-  
-  # Prepare the output
-  format_output <- function(stats, names) {
-    list(
-      proportions = setNames(stats["proportion",], names),
-      standard_errors = setNames(stats["se",], names)
-    )
-  }
-  
-  output <- list(
-    first_fixation = format_output(first_fix_stats, c("Upper Left", "Upper Right", "Lower Left", "Lower Right")),
-    last_fixation = format_output(last_fix_stats, c("Upper Left", "Upper Right", "Lower Left", "Lower Right")),
-    first_fixation_content = format_output(first_content_stats, c("1 Left", "1 Right", "0 Left", "0 Right")),
-    last_fixation_content = format_output(last_content_stats, c("1 Left", "1 Right", "0 Left", "0 Right"))
-  )
-  
-  return(output)
-}
-```
+#Fixated Element code
+#1 = self left
+#2 = self right
+#3 = ngo left
+#4 = ngo right
 
-Create dataframes for Social Task
-```{r}
-social_fix_prop_h <- results <- calculate_fixation_proportions(data_social_hungry_long,nsubj)
-social_fix_prop_s <- results <- calculate_fixation_proportions(data_social_sated_long,nsubj)
-
-```
-
-Function to get data in plotting format
-```{r}
-prepare_data_for_plot <- function(results_sated, results_hungry, type_first, type_last) {
-  # Combine data from both conditions
-  data_first <- bind_rows(
-    tibble(condition = "sated", 
-           category = names(results_sated[[type_first]]$proportions),
-           prop = results_sated[[type_first]]$proportions,
-           SE = results_sated[[type_first]]$standard_errors),
-    tibble(condition = "hungry", 
-           category = names(results_hungry[[type_first]]$proportions),
-           prop = results_hungry[[type_first]]$proportions,
-           SE = results_hungry[[type_first]]$standard_errors)
-  )
-  
-  data_last <- bind_rows(
-    tibble(condition = "sated", 
-           category = names(results_sated[[type_last]]$proportions),
-           prop = results_sated[[type_last]]$proportions,
-           SE = results_sated[[type_last]]$standard_errors),
-    tibble(condition = "hungry", 
-           category = names(results_hungry[[type_last]]$proportions),
-           prop = results_hungry[[type_last]]$proportions,
-           SE = results_hungry[[type_last]]$standard_errors)
-  )
-  
-  list(first = data_first, last = data_last)
+is_odd <- function(x) {
+  x %% 2 == 1
 }
 
-plot_cat_data <- prepare_data_for_plot(social_fix_prop_s, social_fix_prop_h, "first_fixation_content", "last_fixation_content")
-plot_loc_data <- prepare_data_for_plot(social_fix_prop_s, social_fix_prop_h, "first_fixation", "last_fixation")
+# recoding function for position (even subjects saw self on upper side of screen and ngo on lower side, while odd subjects the other way around)
+recode_fixation <- function(fixElement, subject) {
+  ifelse(
+    is_odd(x=subject), # For odd subjects, apply the recoding; For even subjects, keep the original fixElement
+    dplyr::case_when(
+      fixElement == 1 ~ 3,
+      fixElement == 2 ~ 4,
+      fixElement == 3 ~ 1,
+      fixElement == 4 ~ 2,
+      TRUE ~ fixElement
+    ),
+    fixElement  # Return original value for even subjects
+  )
+}
+
+# Apply to dataframes, such that 
+#fixElement2 code
+#1 = upper left
+#2 = upper right
+#3 = lower left
+#4 = lower right
+
+# Apply to dataframes using subject column
+data_social_hungry_long$fixElement2 <- recode_fixation(data_social_hungry_long$fixElement,data_social_hungry_long$subject)
+
+data_social_sated_long$fixElement2 <- recode_fixation(data_social_sated_long$fixElement,data_social_sated_long$subject)
 
 ```
 
-Plotting function
+#### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
+##### 2.3.2.1 hungry
 ```{r}
-create_fixation_plot <- function(data, title, xaxis_labels, xaxis_title = "Category") {
-  ggplot(data = data, aes(x = category, y = prop, fill = condition)) +
+# Group the data by trial and subject
+grouped_social_data_hungry <- data_social_hungry_long %>%
+  group_by(trial, subject)
+
+# a) First Fix
+# Extract the first fixated element for each trial
+first_fix_social_hungry <- grouped_social_data_hungry %>%
+  slice(1) %>%
+  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+
+#category
+first_fix_social_hungry_cat<-first_fix_social_hungry %>%
+  group_by(first_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_social_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+#location
+first_fix_social_hungry_loc<-first_fix_social_hungry %>%
+  group_by(first_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_social_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+
+# b) Last Fix
+# Extract the last fixated element for each trial
+last_fix_social_hungry <- grouped_social_data_hungry %>%
+  slice(n()) %>%
+  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+
+#category
+last_fix_social_hungry_cat<-last_fix_social_hungry %>%
+  group_by(last_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_social_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+#location
+last_fix_social_hungry_loc<-last_fix_social_hungry %>%
+  group_by(last_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_social_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+
+```
+
+##### 2.3.2.2 sated
+```{r}
+# Group the data by trial and subject
+grouped_social_data_sated <- data_social_sated_long %>%
+  group_by(trial, subject)
+
+# a) First Fix
+# Extract the first fixated element for each trial
+first_fix_social_sated <- grouped_social_data_sated %>%
+  slice(1) %>%
+  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+
+#category
+first_fix_social_sated_cat<-first_fix_social_sated %>%
+  group_by(first_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_social_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+#location
+first_fix_social_sated_loc<-first_fix_social_sated %>%
+  group_by(first_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_social_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+
+# b) Last Fix
+# Extract the last fixated element for each trial
+last_fix_social_sated <- grouped_social_data_sated %>%
+  slice(n()) %>%
+  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+
+#category
+last_fix_social_sated_cat<-last_fix_social_sated %>%
+  group_by(last_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_social_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+#location
+last_fix_social_sated_loc<-last_fix_social_sated %>%
+  group_by(last_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_social_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+
+```
+
+
+#PLOT THE STUFF!!
+```{r}
+plot_fixation_proportions <- function(hungry_data, sated_data, fixation_type = c("first", "last"), plot_type = c("location", "category"),custom_labels = NULL) {
+  
+  # Input validation
+  fixation_type <- match.arg(fixation_type)
+  plot_type <- match.arg(plot_type)
+  
+    # Get the actual names from the provided lists
+  hungry_names <- names(hungry_data)
+  sated_names <- names(sated_data)
+  
+  # Select the appropriate data based on fixation type
+  hungry_data_name <- hungry_names[grep(paste0(fixation_type, "_fix"), hungry_names)]
+  sated_data_name <- sated_names[grep(paste0(fixation_type, "_fix"), sated_names)]
+  
+  # Get the data
+  hungry_data_to_use <- hungry_data[[hungry_data_name]]
+  sated_data_to_use <- sated_data[[sated_data_name]]
+  
+  # Set the group column name based on fixation type and plot type
+  group_col <- if(plot_type == "location") {
+    if(fixation_type == "first") "first_element_loc" else "last_element_loc"
+  } else {
+    if(fixation_type == "first") "first_element_cat" else "last_element_cat"
+  }
+  
+  # Set x-axis label
+  x_lab <- if(plot_type == "location") "Location" else "Category"
+  
+  # Combine the data
+  combined_data <- rbind(hungry_data_to_use, sated_data_to_use)
+  combined_data[[group_col]] <- as.factor(combined_data[[group_col]])
+  
+  
+  # Create the plot
+  plot <- ggplot(combined_data, aes(x = !!sym(group_col), y = fix_prop, fill = condition)) +
     geom_bar(stat = "identity", position = "dodge", width = 0.6) +
-    geom_errorbar(aes(ymin = prop - SE, ymax = prop + SE),
-                  position = position_dodge(width = 0.6),
-                  width = 0.2, color = "black", alpha = 0.7) +  
-    geom_hline(yintercept = 0.25, color = "black", linetype="dashed") +
-    labs(x = xaxis_title, y = "Proportion", title = title) +
+    geom_errorbar(aes(ymin = fix_prop - se_prop, ymax = fix_prop + se_prop),position = position_dodge(width = 0.6), width = 0.2, color = "black", alpha = 0.7) +
+    geom_hline(yintercept = 0.25, color = "black",linetype = "dashed") +
+    xlab(x_lab) +
+    ylab("Proportion") +
+    ggtitle("") +
     ylim(0, 1) +
     scale_fill_manual(values = c("sated" = "cornflowerblue", "hungry" = "gold")) +
-    scale_x_discrete(labels = xaxis_labels) +
-    myTheme +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+    myTheme + 
+    scale_x_discrete(labels = custom_labels)
+
+  return(plot)
 }
 ```
 
-Plot first and last fixations
 ```{r}
-# Define axis labels
-axis_loc_fix <- c("upper left", "upper right", "lower right", "lower left")
-axis_cat_fix <- c("Self left", "Self right", "NGO left", "NGO right")
+location_labels <- c("1" ="upper left","2" ="upper right", "3" ="lower left","4" ="lower right")
+category_labels <- c("1" = "self left", "2" = "self right", "3" = "NGO left", "4" = "NGO right")
 
-# Plot for first fixations by location
-first_fix_loc_plot <- create_fixation_plot(
-  plot_loc_data$first, 
-  "Location Proportion First Fixation", 
-  axis_loc_fix,
-  "Location"
+p1 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_loc = first_fix_social_hungry_loc,last_fix_social_hungry_loc = last_fix_social_hungry_loc),
+  sated_data = list(first_fix_social_sated_loc = first_fix_social_sated_loc,last_fix_social_sated_loc = last_fix_social_sated_loc),fixation_type = "first",plot_type = "location", custom_labels = location_labels
 )
-ggsave("prop_firstfix_cond_location.png", plot = first_fix_loc_plot, dpi = 300, width = 10, height = 6)
+p1
+ggsave("prop_firstfix_loc_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
 
-# Plot for first fixations by category
-first_fix_cat_plot <- create_fixation_plot(
-  plot_cat_data$first, 
-  "Category Proportion First Fixation", 
-  axis_cat_fix,
-  "Category"
+p2 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_loc = first_fix_social_hungry_loc,last_fix_social_hungry_loc = last_fix_social_hungry_loc),
+  sated_data = list(first_fix_social_sated_loc = first_fix_social_sated_loc,last_fix_social_sated_loc = last_fix_social_sated_loc),fixation_type = "last",plot_type = "location", custom_labels = location_labels
 )
-ggsave("prop_firstfix_cond_category.png", plot = first_fix_cat_plot, dpi = 300, width = 10, height = 6)
+p2
+ggsave("prop_lastfix_loc_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
 
-# Plot for last fixations by location
-last_fix_loc_plot <- create_fixation_plot(
-  plot_loc_data$last, 
-  "Location Proportion Last Fixation", 
-  axis_loc_fix,
-  "Location"
+p3 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_cat = first_fix_social_hungry_cat,last_fix_social_hungry_cat = last_fix_social_hungry_cat),
+  sated_data = list(first_fix_social_sated_cat = first_fix_social_sated_cat,last_fix_social_sated_cat = last_fix_social_sated_cat),fixation_type = "first",plot_type = "category", custom_labels = category_labels
 )
-ggsave("prop_lastfix_cond_location.png", plot = last_fix_loc_plot, dpi = 300, width = 10, height = 6)
+p3
+ggsave("prop_firstfix_cat_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
 
-# Plot for last fixations by category
-last_fix_cat_plot <- create_fixation_plot(
-  plot_cat_data$last, 
-  "Category Proportion Last Fixation", 
-  axis_cat_fix,
-  "Category"
+p4 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_cat = first_fix_social_hungry_cat,last_fix_social_hungry_cat = last_fix_social_hungry_cat),
+  sated_data = list(first_fix_social_sated_cat = first_fix_social_sated_cat,last_fix_social_sated_cat = last_fix_social_sated_cat),fixation_type = "last",plot_type = "category", custom_labels = category_labels
 )
-ggsave("prop_lastfix_cond_category.png", plot = last_fix_cat_plot, dpi = 300, width = 10, height = 6)
-
-# Display the plots
-print(first_fix_loc_plot)
-print(first_fix_cat_plot)
-print(last_fix_loc_plot)
-print(last_fix_cat_plot)
+p4
+ggsave("prop_lastfix_cat_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
 ```
+
 
 ### 2.4 Fixation  Transitions
 ```{r}
@@ -532,6 +609,85 @@ ggsave("pchoice_dwelltime_discount.png",  width = 8, height = 6, plot = last_plo
 p1
 ```
 
+```{r}
+# #recode ngo/value 
+data_discount_combined$dwelldiff_time_time <- data_discount_combined$timeleft_time+data_discount_combined$timeright_time - data_discount_combined$valueleft_time+data_discount_combined$valueright_time 
+
+data_discount_combined$dwelldiff_time_amount <- data_discount_combined$valueleft_time+data_discount_combined$valueright_time -data_discount_combined$timeleft_time+data_discount_combined$timeright_time 
+
+# To get both in one summary:
+data_discount_combined %>%
+  group_by(condition) %>%
+  summarize(
+    # Time differences
+    mean_time = mean(dwelldiff_time_time),
+    max_time = max(dwelldiff_time_time),
+    min_time = min(dwelldiff_time_time),
+    # Amount differences
+    mean_amount = mean(dwelldiff_time_amount),
+    max_amount = max(dwelldiff_time_amount),
+    min_amount = min(dwelldiff_time_amount)
+  )
+
+#THINK ABOUT BINNING!
+```
+
+```{r}
+# Calculate the mean probability and standard error for each bin
+summary_amount <- data_discount_combined %>%
+  mutate(bin2 = cut(dwelldiff_time_time, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
+  group_by(bin2, condition) %>%
+  summarise(mean_prob_time = mean(choice2),
+            std_error_time = sd(choice2) / sqrt(n()))
+
+
+p2 <- ggplot(summary_amount, aes(x = bin2, y = mean_prob_time, color = condition, group = condition)) +
+  geom_smooth(aes(y = mean_prob_time, fill = condition), method = "loess", span = 0.75, se = TRUE, linetype = "solid", alpha=0.3) +
+  scale_color_manual(values = c("gold", "cornflowerblue")) +
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
+  labs(x = "Dwell Time Difference Time vs Amount", y = "P(Impatient Choice)") +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
+  ylim(0,1)+
+  myTheme
+ggsave("pchoice_dwelltime_amountvstime.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
+p2
+```
+
+```{r}
+# Define new bin edges that better reflect your data distribution
+bin_edges <- c(-Inf, -1500, -1000, -500, 0, 500, 1000, 2000, 3000, 5000, 8000, Inf)
+bin_labels <- c("<-1500", "-1000", "-500", "0", "500", "1000", "2000", "3000", "5000", "8000", ">8000")
+
+# Modified plotting code
+summary_amount <- data_discount_combined %>%
+  mutate(bin2 = cut(dwelldiff_time_amount, 
+                    breaks = bin_edges, 
+                    labels = bin_labels, 
+                    include.lowest = TRUE)) %>%
+  group_by(bin2, condition) %>%
+  summarise(mean_prob_time = mean(choice2),
+            std_error_time = sd(choice2) / sqrt(n()),
+            n = n())
+
+p2 <- ggplot(summary_amount, aes(x = bin2, y = mean_prob_time, color = condition, group = condition)) +
+  geom_smooth(aes(y = mean_prob_time, fill = condition), 
+              method = "loess", span = 0.75, se = TRUE, 
+              linetype = "solid", alpha=0.3) +
+  scale_color_manual(values = c("gold", "cornflowerblue")) +
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +
+  labs(x = "Dwell Time Difference Amount vs Time", 
+       y = "P(Impatient Choice)") +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
+  ylim(0,1) +
+  myTheme
+
+p2
+```
+
+
+
 ### 2.2 Plot more attention to time attribute under hunger?
 ```{r}
 data_discount_combined$att_time<-0
@@ -601,65 +757,167 @@ data_discount_sated_long_w0<-data_discount_hungry_long
 data_discount_hungry_long<-subset(data_discount_hungry_long, fixElement != 0)
 data_discount_sated_long<-subset(data_discount_sated_long, fixElement != 0)
 ```
-
+#### 2.3.1 Recode for position
 ```{r}
-discount_fix_prop_h <- results <- calculate_fixation_proportions(data_discount_hungry_long,nsubj)
-discount_fix_prop_s <- results <- calculate_fixation_proportions(data_discount_sated_long,nsubj)
+#Fixated Element code
+#1 = time left
+#2 = time right
+#3 = amount left
+#4 = amount right
 
-plot_cat_data_discount <- prepare_data_for_plot(discount_fix_prop_s, discount_fix_prop_h, "first_fixation_content", "last_fixation_content")
-plot_loc_data_discount <- prepare_data_for_plot(discount_fix_prop_s, discount_fix_prop_h, "first_fixation", "last_fixation")
+is_even <- function(x) {
+  x %% 2 == 0
+}
+
+# recoding function for position (even subjects saw value on upper side of screen and time on lower side, while odd subjects the other way around)
+recode_fixation2 <- function(fixElement, subject) {
+  ifelse(
+    is_even(subject),
+    dplyr::case_when(
+      fixElement == 1 ~ 3,
+      fixElement == 2 ~ 4,
+      fixElement == 3 ~ 1,
+      fixElement == 4 ~ 2,
+      TRUE ~ fixElement
+    ),
+    fixElement  # Return original value for even subjects
+  )
+}
+
+# Apply to dataframes, such that 
+#fixElement2 code
+#1 = upper left
+#2 = upper right
+#3 = lower left
+#4 = lower right
+data_discount_hungry_long$fixElement2 <- recode_fixation2(data_discount_hungry_long$fixElement, data_discount_hungry_long$subject)
+data_discount_sated_long$fixElement2 <- recode_fixation2(data_discount_sated_long$fixElement, data_discount_sated_long$subject)
+
 ```
 
-Plot first and last fixations
+#### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
+
+##### 2.3.2.1 hungry
 ```{r}
-# Define axis labels
-axis_loc_fix_d <- c("upper left", "upper right", "lower right", "lower left")
-axis_cat_fix_d <- c("Amount left", "Amount right", "Time left", "Time right")
+# Group the data by trial and subject
+grouped_discount_data_hungry <- data_discount_hungry_long %>%
+  group_by(trial, subject)
 
-# Plot for first fixations by location
-first_fix_loc_plot <- create_fixation_plot(
-  plot_loc_data_discount$first, 
-  "Location Proportion First Fixation", 
-  axis_loc_fix_d,
-  "Location"
-)
-ggsave("prop_firstfix_cond_location_discount.png", plot = first_fix_loc_plot, dpi = 300, width = 10, height = 6)
+# a) First Fix
+# Extract the first fixated element for each trial
+first_fix_discount_hungry <- grouped_discount_data_hungry %>%
+  slice(1) %>%
+  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
 
-# Plot for first fixations by category
-first_fix_cat_plot <- create_fixation_plot(
-  plot_cat_data_discount$first, 
-  "Category Proportion First Fixation", 
-  axis_cat_fix_d,
-  "Category"
-)
-ggsave("prop_firstfix_cond_category_discount.png", plot = first_fix_cat_plot, dpi = 300, width = 10, height = 6)
+#category
+first_fix_discount_hungry_cat<-first_fix_discount_hungry %>%
+  group_by(first_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_discount_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+#location
+first_fix_discount_hungry_loc<-first_fix_discount_hungry %>%
+  group_by(first_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_discount_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
 
-# Plot for last fixations by location
-last_fix_loc_plot <- create_fixation_plot(
-  plot_loc_data_discount$last, 
-  "Location Proportion Last Fixation", 
-  axis_loc_fix_d,
-  "Location"
-)
-ggsave("prop_lastfix_cond_location_discount.png", plot = last_fix_loc_plot, dpi = 300, width = 10, height = 6)
+# b) Last Fix
+# Extract the last fixated element for each trial
+last_fix_discount_hungry <- grouped_discount_data_hungry %>%
+  slice(n()) %>%
+  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
 
-# Plot for last fixations by category
-last_fix_cat_plot <- create_fixation_plot(
-  plot_cat_data_discount$last, 
-  "Category Proportion Last Fixation", 
-  axis_cat_fix_d,
-  "Category"
-)
-ggsave("prop_lastfix_cond_category_discount.png", plot = last_fix_cat_plot, dpi = 300, width = 10, height = 6)
+#category
+last_fix_discount_hungry_cat<-last_fix_discount_hungry %>%
+  group_by(last_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_discount_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+#location
+last_fix_discount_hungry_loc<-last_fix_discount_hungry %>%
+  group_by(last_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_discount_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
 
-# Display the plots
-print(first_fix_loc_plot)
-print(first_fix_cat_plot)
-print(last_fix_loc_plot)
-print(last_fix_cat_plot)
 ```
 
-  
+##### 2.3.2.2 sated
+```{r}
+# Group the data by trial and subject
+grouped_discount_data_sated <- data_discount_sated_long %>%
+  group_by(trial, subject)
+
+# a) First Fix
+# Extract the first fixated element for each trial
+first_fix_discount_sated <- grouped_discount_data_sated %>%
+  slice(1) %>%
+  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+
+#category
+first_fix_discount_sated_cat<-first_fix_discount_sated %>%
+  group_by(first_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_discount_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+#location
+first_fix_discount_sated_loc<-first_fix_discount_sated %>%
+  group_by(first_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_discount_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+
+# b) Last Fix
+# Extract the last fixated element for each trial
+last_fix_discount_sated <- grouped_discount_data_sated %>%
+  slice(n()) %>%
+  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+
+#category
+last_fix_discount_sated_cat<-last_fix_discount_sated %>%
+  group_by(last_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_discount_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+#location
+last_fix_discount_sated_loc<-last_fix_discount_sated %>%
+  group_by(last_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_discount_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+
+```
+
+```{r}
+location_labels <- c("1" ="upper left","2" ="upper right", "3" ="lower left","4" ="lower right")
+category_labels <- c("1" = "time left", "2" = "time right", "3" = "amount left", "4" = "amount right")
+
+p1 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_loc = first_fix_discount_hungry_loc,last_fix_discount_hungry_loc = last_fix_discount_hungry_loc),
+  sated_data = list(first_fix_discount_sated_loc = first_fix_discount_sated_loc,last_fix_discount_sated_loc = last_fix_discount_sated_loc),fixation_type = "first",plot_type = "location", custom_labels = location_labels
+)
+p1
+ggsave("prop_firstfix_loc_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+
+p2 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_loc = first_fix_discount_hungry_loc,last_fix_discount_hungry_loc = last_fix_discount_hungry_loc),
+  sated_data = list(first_fix_discount_sated_loc = first_fix_discount_sated_loc,last_fix_discount_sated_loc = last_fix_discount_sated_loc),fixation_type = "last",plot_type = "location", custom_labels = location_labels
+)
+p2
+ggsave("prop_lastfix_loc_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+
+p3 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_cat = first_fix_discount_hungry_cat,last_fix_discount_hungry_cat = last_fix_discount_hungry_cat),
+  sated_data = list(first_fix_discount_sated_cat = first_fix_discount_sated_cat,last_fix_discount_sated_cat = last_fix_discount_sated_cat),fixation_type = "first",plot_type = "category", custom_labels = category_labels
+)
+p3
+ggsave("prop_firstfix_cat_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+
+p4 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_cat = first_fix_discount_hungry_cat,last_fix_discount_hungry_cat = last_fix_discount_hungry_cat),
+  sated_data = list(first_fix_discount_sated_cat = first_fix_discount_sated_cat,last_fix_discount_sated_cat = last_fix_discount_sated_cat),fixation_type = "last",plot_type = "category", custom_labels = category_labels
+)
+p4
+ggsave("prop_lastfix_cat_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+```
+
 
 
 ```{r}
@@ -717,3 +975,12 @@ box_plot
 ggsave("average_transitions_discount.png", width = 8, height = 6, plot = last_plot(), dpi = 300)
 
 ```
+### Check overall fix props
+```{r}
+data_social_hungry$fixprob_selfleft <- data_social_hungry$selfleft_time/(data_social_hungry$selfleft_time + data_social_hungry$selfright_time + data_social_hungry$ngoleft_time + data_social_hungry$ngoright_time)
+mean(data_social_hungry$fixprob_selfleft,na.rm = TRUE)
+
+data_social_hungry$fixprob_selfright <- data_social_hungry$selfright_time/(data_social_hungry$selfleft_time + data_social_hungry$selfright_time + data_social_hungry$ngoleft_time + data_social_hungry$ngoright_time)
+mean(data_social_hungry$fixprob_selfright,na.rm = TRUE)
+```
+
