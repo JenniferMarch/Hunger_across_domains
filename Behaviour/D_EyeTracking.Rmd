@@ -654,38 +654,6 @@ ggsave("pchoice_dwelltime_amountvstime.png",  width = 8, height = 6, plot = last
 p2
 ```
 
-```{r}
-# Define new bin edges that better reflect your data distribution
-bin_edges <- c(-Inf, -1500, -1000, -500, 0, 500, 1000, 2000, 3000, 5000, 8000, Inf)
-bin_labels <- c("<-1500", "-1000", "-500", "0", "500", "1000", "2000", "3000", "5000", "8000", ">8000")
-
-# Modified plotting code
-summary_amount <- data_discount_combined %>%
-  mutate(bin2 = cut(dwelldiff_time_amount, 
-                    breaks = bin_edges, 
-                    labels = bin_labels, 
-                    include.lowest = TRUE)) %>%
-  group_by(bin2, condition) %>%
-  summarise(mean_prob_time = mean(choice2),
-            std_error_time = sd(choice2) / sqrt(n()),
-            n = n())
-
-p2 <- ggplot(summary_amount, aes(x = bin2, y = mean_prob_time, color = condition, group = condition)) +
-  geom_smooth(aes(y = mean_prob_time, fill = condition), 
-              method = "loess", span = 0.75, se = TRUE, 
-              linetype = "solid", alpha=0.3) +
-  scale_color_manual(values = c("gold", "cornflowerblue")) +
-  scale_fill_manual(values = c("gold", "cornflowerblue")) +
-  labs(x = "Dwell Time Difference Amount vs Time", 
-       y = "P(Impatient Choice)") +
-  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
-  ylim(0,1) +
-  myTheme
-
-p2
-```
-
 
 
 ### 2.2 Plot more attention to time attribute under hunger?
