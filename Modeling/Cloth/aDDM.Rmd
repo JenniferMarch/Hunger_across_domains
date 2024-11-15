@@ -17,7 +17,9 @@ This script contains all the models tested in our manuscript (https://osf.io/pre
 ```{r}
 #clear working environment
 rm(list=ls())
+```
 
+```{r}
 #clear all plots
 #if(!is.null(dev.list())) dev.off()
 
@@ -64,77 +66,207 @@ myTheme <- theme(
 ## 1.3 Load workspace 
 ```{r}
 # load data
-setwd("~/Desktop/WorkingProjects/JM_maaDDM/Hunger_across_domains/")
-load("data/datasets.RData")
+setwd("~/Desktop/WorkingProjects/JM_maaDDM/Hunger_across_domains/Modeling/Cloth")
+load("../../data/datasets.RData")
 
 #clear all plots
 if(!is.null(dev.list())) dev.off()
 
 # only include valid trials
 data <- data_clothing
+# only include valid trials
+validT <- which((is.na(data$fixProp1)==0)|(is.na(data$fixProp2)==0)|(is.na(data$fixProp3)==0)|(is.na(data$fixProp4)==0))
+data <- data[validT, ]
 N <- length(data$RT)
 S <- length(unique(data$subject))
 ```
 
+## 1.4 setting for model Fitting 
+```{r}
+# solve it later.... The variables cannot be recognized in jags.parallel
+nChains <- 3 # nChains <- 8
+nAdaptSteps <- 7000 #ceiling(nUseSteps*nThinSteps/nChains)
+nThinSteps <- 2
+nBurninSteps <- 500
+
+```
 
 # 2 Attentional DDM 
 ## 2.1 Estimate maaDDM_noPhi with hierarchical Bayesian modeling (JAGS)
 ```{r}
-# get data and initial values together and specify the model
-ddmData <- list('N'=N,'S'=S,'P'=P,'attribute1A'=data$upleft_val,'attribute1B'=data$upright_val,'attribute2A'=data$downleft_val,'attribute2B'=data$downright_val,'RT'=data$RT_right/1000,'fixProp1'=data$fixProp1,'fixProp2'=data$fixProp2,'fixProp3'=data$fixProp3,'fixProp4'=data$fixProp4)
 
-#starting values
-nChains <- 8
+
+# get data and initial values together and specify the model
+ddmData <- list('N'=N,'S'=S,'P'=data$P_subj,'attribute1A'=data$scl_upleft_val,'attribute1B'=data$scl_upright_val,'attribute2A'=data$scl_downleft_val,'attribute2B'=data$scl_downright_val,'RT'=data$RT_right/1000,'fixProp1'=data$fixProp1,'fixProp2'=data$fixProp2,'fixProp3'=data$fixProp3,'fixProp4'=data$fixProp4)
 
 #parallel computing apparently not possible
 T1<-Sys.time()
-addm_discount <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
-                               parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
-                                                      'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+addm_cloth <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+                            parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                                   'mu_drift','sigma_drift','mu_weight1','sigma_weight1', 
+                                                   'mu_theta','sigma_theta',
+                                                   'bound','ndt','drift','weight1','theta'),
+                            
+                            model.file = "BayesModel_maaDDM_noPhi.txt", 
+                            
+                            working.directory = '../BayesModels_noHungry',
+                            
+                            # n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
+                            n.chains = nChains, n.iter = 7000, n.burnin = 500, n.thin = 2, 
+                            DIC = TRUE,jags.module = c("glm","dic","wiener"))
 
-'mu_theta','sigma_theta',
-                                                      'bound','ndt','drift','weight1','theta'),
-                               model.file = "BayesModel_maaDDM_noPhi.txt", working.directory = 'BayesModels',
-                               n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, DIC = TRUE,jags.module = c("glm","dic","wiener"))
+# Check duration of computing 
 T2<-Sys.time() #T2-T1
 
 # check convergence
-ddmRhats <- addm_discount$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+ddmRhats <- addm_cloth$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
 max(ddmRhats)
-addm_discount$BUGSoutput$DIC
+addm_cloth$BUGSoutput$DIC
 
-save.image(file='addm_discount.RData')
+save.image(file='addm_cloth.RData')
+
+```
+## 2.2 maaDDM
+```{r}
+#parallel computing apparently not possible
+T1<-Sys.time()
+maaDDM_cloth <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                                           'mu_theta','sigma_theta','mu_phy','sigma_phy',
+                                           'bound','ndt','drift','weight1','theta','phy'),
+
+model.file = "BayesModel_maaDDM.txt", 
+
+working.directory = '../BayesModels_noHungry',
+
+# n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
+n.chains = nChains, n.iter = 7000, n.burnin = 500,
+n.thin = 2, 
+DIC = TRUE,jags.module = c("glm","dic","wiener"))
+
+# Check duration of computing 
+T2<-Sys.time() #T2-T1
+
+# check convergence and fit
+ddmRhats <- maaDDM_cloth$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+maaDDM_cloth$BUGSoutput$DIC
+#max R_hat = 1.032; DIC = 30546.33
+save.image(file='maaDDM_cloth.RData')
+```
+
+## 2.3 maaDDM_2Phi
+```{r}
+#starting values
+# nChains <- 8
+nChains <- 3
+
+#parallel computing apparently not possible
+T1<-Sys.time()
+maa2phiDDM_cloth <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                                           'mu_theta','sigma_theta','mu_phy','sigma_phy', 'mu_phy2','sigma_phy2', 
+                                           'bound','ndt','drift','weight1','theta','phy', 'phy2'),
+
+model.file = "BayesModel_maaDDM_2Phi.txt", 
+
+working.directory = '../BayesModels_noHungry',
+
+# n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
+n.chains = nChains, n.iter = 7000, n.burnin = 500, 
+n.thin = 2, 
+DIC = TRUE,jags.module = c("glm","dic","wiener"))
+
+# Check duration of computing 
+T2<-Sys.time() #T2-T1
+
+# check convergence and fit
+ddmRhats <- maa2phiDDM_cloth$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+maa2phiDDM_cloth$BUGSoutput$DIC
+#max R_hat = 1.032; DIC = 30546.33
+save.image(file='maa2phiDDM_cloth.RData')
+```
+
+# 3 Check Parameters (group posteriors)
+```{r}
+getwd()
+load(file='maa2phiDDM_cloth.RData')
+c(addm_cloth$BUGSoutput$DIC,maaDDM_cloth$BUGSoutput$DIC,maa2phiDDM_cloth$BUGSoutput$DIC)
+#get group parameter estimates in transformed form 
+#ddm_results <- addm_cloth
+#ddm_results <- maaDDM_cloth
+ddm_results <- maa2phiDDM_cloth
+boundSep <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_bound))
+ndt <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_ndt))
+
+weight1 <- pnorm(ddm_results$BUGSoutput$sims.list$mu_weight1)
+drift <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_drift))
+
+theta <- pnorm(ddm_results$BUGSoutput$sims.list$mu_theta)
+phy <- pnorm(ddm_results$BUGSoutput$sims.list$mu_phy)
+phy2 <- pnorm(ddm_results$BUGSoutput$sims.list$mu_phy2)
+```
+
+```{r}
+# List of variable names, labels, and binwidths for each plot
+est_parameters <- list(
+  list(name = "weight1", label = "Taste Weight", binwidth = 1/100, maxY = 500),
+  list(name = "drift", label = "Drift Scaling", binwidth = 1/170, maxY = 500),
+  list(name = "boundSep", label = "Boundary Separation", binwidth = 1/30, maxY = 500),
+  list(name = "ndt", label = "Non-Decision Time", binwidth = 1/150, maxY = 500),
+  list(name = "theta", label = "Theta", binwidth = 1/850, maxY = 500),
+  list(name = "phy", label = "phy", binwidth = 1/400, maxY = 250),
+  list(name = "phy2", label = "phy2", binwidth = 1/400, maxY = 250)
+)
+
+# List to store plots
+plot_list <- list()
+
+# Loop over variables to create each plot
+for (i in seq_along(est_parameters)) {
+  param <- est_parameters[[i]]
+  
+  # Dynamically create data frame based on variable name
+  param_data <- data.frame(value = get(param$name))
+  
+  # Create the plot
+  plot_list[[i]] <- ggplot(param_data, aes(x = value)) +
+    geom_histogram(binwidth = param$binwidth, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+    labs(x = param$label, y = "Frequency") +
+    ylim(0, param$maxY) +
+    myTheme
+}
+
+# Display plots (e.g., print(plot_list[[1]]), print(plot_list[[2]]), etc.)
 
 ```
 
-## 2.2 Check Parameters (group posteriors)
 ```{r}
-#get group parameter estimates in transformed form 
-boundSep_S <- log(1+exp(addm_discount$BUGSoutput$sims.list$mu_bound))
-boundSep_H <- log(1+exp(addm_discount$BUGSoutput$sims.list$mu_bound+addm_discount$BUGSoutput$sims.list$mu_bound_H))
-boundSep_delta <- addm_discount$BUGSoutput$sims.list$mu_bound_H
+# difference between phy
+phy_delta <- ddm_results$BUGSoutput$sims.list$mu_phy2-ddm_results$BUGSoutput$sims.list$mu_phy
+data_delta_phy <- data.frame(phy_delta = phy_delta)
+HDI_phy <- quantile(phy_delta,c(.025,.975))
 
-ndt_S <- log(1+exp(addm_discount$BUGSoutput$sims.list$mu_ndt))
-ndt_H <- log(1+exp(addm_discount$BUGSoutput$sims.list$mu_ndt+addm_discount$BUGSoutput$sims.list$mu_ndt_H))
-ndt_delta <- addm_discount$BUGSoutput$sims.list$mu_ndt_H
-
-weight1_S <- pnorm(addm_discount$BUGSoutput$sims.list$mu_weight1)
-weight1_H <- pnorm(addm_discount$BUGSoutput$sims.list$mu_weight1+addm_discount$BUGSoutput$sims.list$mu_weight1_H)
-weight1_delta <- addm_discount$BUGSoutput$sims.list$mu_weight1_H
-
-drift_S <- log(1+exp(addm_discount$BUGSoutput$sims.list$mu_drift))
-drift_H <- log(1+exp(addm_discount$BUGSoutput$sims.list$mu_drift+addm_discount$BUGSoutput$sims.list$mu_drift_H))
-drift_delta <- addm_discount$BUGSoutput$sims.list$mu_drift_H
-
-theta_S <- pnorm(addm_discount$BUGSoutput$sims.list$mu_theta)
-theta_H <- pnorm(addm_discount$BUGSoutput$sims.list$mu_theta+addm_discount$BUGSoutput$sims.list$mu_theta_H)
-theta_delta <- addm_discount$BUGSoutput$sims.list$mu_theta_H
-
+# Plot using ggplot2
+phy_plot<-ggplot(data_delta_phy, aes(x = phy_delta)) +
+  geom_histogram(binwidth = 1/110, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_phy, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 500)+
+  labs(x = "Phy2>Phy1", y = "Frequency") +
+  myTheme
+# phy2 is significantly smaller than phy1
+```
+  
+```{r}
 ##plot each parameter with memory and stress effects
 
 ## PLOT 
 
-#1) Taste weight 
+#1) weight for upper attribute
 histGran <- (-300:300)/150
 # Create a data frame
 datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
@@ -146,17 +278,7 @@ tasteweight1<-ggplot(datatw, aes(x = weight1_S)) +
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   ylim(0, 5000)+
   myTheme
-# effect of hunger 
-data_deltatw <- data.frame(weight1_delta = weight1_delta)
-HDI_tw <- quantile(weight1_delta,c(.025,.975))
-# Plot using ggplot2
-tasteweight2<-ggplot(data_deltatw, aes(x = weight1_delta)) +
-  geom_histogram(binwidth = 1/20, fill = "grey", alpha = 0.5, color = "black") +
-  geom_vline(xintercept = 0, color = "red", size = 1.5) +
-  geom_vline(xintercept = HDI_tw, color = "black", size = 1, linetype = "dashed") +
-  ylim(0, 5000)+
-  labs(x = "Effect of Hunger", y = "Frequency") +
-  myTheme
+
 
 # 2) Scaling
 histGran <- (-300:300)/150
@@ -171,18 +293,6 @@ drift1<-ggplot(datascale, aes(x = drift_S)) +
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   myTheme
 
-# effect of hunger 
-data_deltascale <- data.frame(drift_delta = drift_delta)
-HDI_drift <- quantile(drift_delta,c(.025,.975))
-# Plot using ggplot2
-drift2<-ggplot(data_deltascale, aes(x = drift_delta)) +
-  geom_histogram(binwidth = 1/60, fill = "grey", alpha = 0.5, color = "black") +
-  geom_vline(xintercept = 0, color = "red", size = 1.5) +
-  geom_vline(xintercept = HDI_drift, color = "black", size = 1, linetype = "dashed") +
-  ylim(0, 5000)+
-  labs(x = "Effect of Hunger", y = "Frequency") +
-  myTheme
-
 #3) Boundary seperation
 histGran <- (-300:300)/150
 # Create a data frame
@@ -195,17 +305,7 @@ bound1<-ggplot(databound, aes(x = boundSep_S)) +
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   ylim(0, 5000)+
   myTheme
-# effect of hunger 
-data_deltabound <- data.frame(boundSep_delta = boundSep_delta)
-HDI_bound <- quantile(boundSep_delta,c(.025,.975))
-# Plot using ggplot2
-bound2<-ggplot(data_deltabound, aes(x = boundSep_delta)) +
-  geom_histogram(binwidth = 1/50, fill = "grey", alpha = 0.5, color = "black") +
-  geom_vline(xintercept = 0, color = "red", size = 1.5) +
-  geom_vline(xintercept = HDI_bound, color = "black", size = 1, linetype = "dashed") +
-  ylim(0, 5000)+
-  labs(x = "Effect of Hunger", y = "Frequency") +
-  myTheme
+
 
 # 4) nDT
 histGran <- (-300:300)/150
@@ -220,19 +320,7 @@ nDT1<-ggplot(datanDT, aes(x = ndt_S)) +
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   myTheme
 
-# effect of hunger 
-data_deltandt <- data.frame(ndt_delta = ndt_delta)
-HDI_ndt <- quantile(ndt_delta,c(.025,.975))
-# Plot using ggplot2
-nDT2<-ggplot(data_deltandt, aes(x = ndt_delta)) +
-  geom_histogram(binwidth = 1/110, fill = "grey", alpha = 0.5, color = "black") +
-  geom_vline(xintercept = 0, color = "red", size = 1.5) +
-  geom_vline(xintercept = HDI_ndt, color = "black", size = 1, linetype = "dashed") +
-  ylim(0, 5000)+
-  labs(x = "Effect of Hunger", y = "Frequency") +
-  myTheme
-
-# 6) Theta
+# 5) Theta
 histGran <- (-300:300)/150
 # Create a data frame
 datatheta <- data.frame(theta_S = theta_S, theta_H = theta_H)
@@ -244,19 +332,6 @@ theta1<-ggplot(datatheta, aes(x = theta_S)) +
   ylim(0, 5000)+
   #scale_x_continuous(limits = c(-0.1, 0.25)) +
   myTheme
-
-# effect of hunger 
-data_deltatheta <- data.frame(theta_delta = theta_delta)
-HDI_theta <- quantile(theta_delta,c(.025,.975))
-# Plot using ggplot2
-theta2<-ggplot(data_deltatheta, aes(x = theta_delta)) +
-  geom_histogram(binwidth = 1/275, fill = "grey", alpha = 0.5, color = "black") +
-  geom_vline(xintercept = 0, color = "red", size = 1.5) +
-  geom_vline(xintercept = HDI_theta, color = "black", size = 1, linetype = "dashed") +
-  ylim(0, 5000)+
-  labs(x = "Effect of Hunger", y = "Frequency") +
-  myTheme
-
 
 library(cowplot)
 # Arrange the plots side by side

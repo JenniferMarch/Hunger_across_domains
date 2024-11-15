@@ -66,6 +66,11 @@ myTheme <- theme(
 # load data
 setwd("~/Desktop/WorkingProjects/JM_maaDDM/Hunger_across_domains/Modeling/Cloth")
 load("../../data/datasets.RData")
+data <- c()
+data <- org_data_food_sated
+
+# try Jenna's
+# load("../Social/data_social_prep.RData")
 
 #clear all plots
 if(!is.null(dev.list())) dev.off()
@@ -84,7 +89,7 @@ S <- length(unique(data$subject))
 ## 2.1 Estimate maaDDM_noPhi with hierarchical Bayesian modeling (JAGS)
 ```{r}
 # get data and initial values together and specify the model
-ddmData <- list('N'=N,'S'=S,'P'=data$P_subj,'attribute1A'=data$upleft_val,'attribute1B'=data$upright_val,'attribute2A'=data$downleft_val,'attribute2B'=data$downright_val,'RT'=data$RT_right/1000,'fixProp1'=data$fixProp1,'fixProp2'=data$fixProp2,'fixProp3'=data$fixProp3,'fixProp4'=data$fixProp4)
+ddmData <- list('N'=N,'S'=S,'P'=data$P_subj,'attribute1A'=data$scl_upleft_val,'attribute1B'=data$scl_upright_val,'attribute2A'=data$scl_downleft_val,'attribute2B'=data$scl_downright_val,'RT'=data$RT_right/1000,'fixProp1'=data$fixProp1,'fixProp2'=data$fixProp2,'fixProp3'=data$fixProp3,'fixProp4'=data$fixProp4)
 
 #starting values
 # nChains <- 8
@@ -191,6 +196,10 @@ save.image(file='maa2phiDDM_food.RData')
 ```{r}
 load(file='maa2phiDDM_food.RData')
 #get group parameter estimates in transformed form 
+c(addm_food$BUGSoutput$DIC,maaDDM_food$BUGSoutput$DIC,maa2phiDDM_food$BUGSoutput$DIC)
+#get group parameter estimates in transformed form 
+#ddm_results <- addm_food
+#ddm_results <- maaDDM_food
 ddm_results <- maa2phiDDM_food
 boundSep <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_bound))
 ndt <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_ndt))

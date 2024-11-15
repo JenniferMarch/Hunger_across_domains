@@ -67,7 +67,7 @@ myTheme <- theme(
 setwd("~/Desktop/WorkingProjects/JM_maaDDM/Hunger_across_domains/Modeling/Cloth")
 load("../../data/datasets.RData")
 data <- c()
-data <- org_data_social_sated
+data <- org_data_discount_sated
 # try Jenna's
 # load("../Social/data_social_prep.RData")
 
@@ -95,7 +95,7 @@ nChains <- 3
 
 #parallel computing apparently not possible
 T1<-Sys.time()
-addm_social <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+addm_TD <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
 parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
 'mu_drift','sigma_drift','mu_weight1','sigma_weight1', 
 'mu_theta','sigma_theta',
@@ -113,11 +113,11 @@ DIC = TRUE,jags.module = c("glm","dic","wiener"))
 T2<-Sys.time() #T2-T1
 
 # check convergence
-ddmRhats <- addm_social$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+ddmRhats <- addm_TD$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
 max(ddmRhats)
-addm_social$BUGSoutput$DIC
+addm_TD$BUGSoutput$DIC
 
-save.image(file='addm_social.RData')
+save.image(file='addm_TD.RData')
 
 ```
 
@@ -129,7 +129,7 @@ nChains <- 3
 
 #parallel computing apparently not possible
 T1<-Sys.time()
-maaDDM_social <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+maaDDM_TD <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
 parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
                                            'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
                                            'mu_theta','sigma_theta','mu_phy','sigma_phy',
@@ -147,11 +147,11 @@ DIC = TRUE,jags.module = c("glm","dic","wiener"))
 T2<-Sys.time() #T2-T1
 
 # check convergence and fit
-ddmRhats <- maaDDM_social$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+ddmRhats <- maaDDM_TD$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
 max(ddmRhats)
-maaDDM_social$BUGSoutput$DIC
+maaDDM_TD$BUGSoutput$DIC
 #max R_hat = 1.032; DIC = 30546.33
-save.image(file='maaDDM_social.RData')
+save.image(file='maaDDM_TD.RData')
 ```
 
 # 2.3 maaDDM_2Phi
@@ -162,7 +162,7 @@ nChains <- 3
 
 #parallel computing apparently not possible
 T1<-Sys.time()
-maa2phiDDM_social <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+maa2phiDDM_TD <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
 parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
                                            'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
                                            'mu_theta','sigma_theta','mu_phy','sigma_phy', 'mu_phy2','sigma_phy2', 
@@ -173,30 +173,30 @@ model.file = "BayesModel_maaDDM_2Phi.txt",
 working.directory = '../BayesModels_noHungry',
 
 # n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
-n.chains = nChains, n.iter = 7000, n.burnin = 500,n.thin = 2, 
+n.chains = nChains, n.iter = 10000, n.burnin = 1000,n.thin = 2, 
 DIC = TRUE,jags.module = c("glm","dic","wiener"))
 
 # Check duration of computing 
 T2<-Sys.time() #T2-T1
 
 # check convergence and fit
-ddmRhats <- maa2phiDDM_social$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+ddmRhats <- maa2phiDDM_TD$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
 max(ddmRhats)
-maa2phiDDM_social$BUGSoutput$DIC
+maa2phiDDM_TD$BUGSoutput$DIC
 #max R_hat = 1.032; DIC = 30546.33
-save.image(file='maa2phiDDM_social.RData')
+save.image(file='maa2phiDDM_TD.RData')
 ```
 
 # 3 Check Parameters (group posteriors)
 ```{r}
-load(file='maa2phiDDM_social.RData')
+load(file='maa2phiDDM_TD.RData')
 ```
 
 ```{r}
 #get group parameter estimates in transformed form 
-#ddm_results <- addm_social
-#ddm_results <- maaDDM_social
-ddm_results <- maa2phiDDM_social
+#ddm_results <- addm_TD
+#ddm_results <- maaDDM_TD
+ddm_results <- maa2phiDDM_TD
 
 boundSep <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_bound))
 ndt <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_ndt))
@@ -212,7 +212,7 @@ phy2 <- pnorm(ddm_results$BUGSoutput$sims.list$mu_phy2)
 ```{r}
 # List of variable names, labels, and binwidths for each plot
 est_parameters <- list(
-  list(name = "weight1", label = "Self Weight", binwidth = 1/500, maxY = 500),
+  list(name = "weight1", label = "Amount Weight", binwidth = 1/500, maxY = 500),
   list(name = "drift", label = "Drift Scaling", binwidth = 1/400, maxY = 500),
   list(name = "boundSep", label = "Boundary Separation", binwidth = 1/300, maxY = 500),
   list(name = "ndt", label = "Non-Decision Time", binwidth = 1/150, maxY = 500),
