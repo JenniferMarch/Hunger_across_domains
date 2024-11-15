@@ -4,18 +4,21 @@ output: html_document
 date: "2024-10-23"
 ---
 ### Information
-This script creates combines questionnaire and experimental data, It calculates relevant control variables for the GLMMs and implements the preprocessing in line with our preregistration: https://osf.io/tmdw3 
-Ultimately, the script saves the dataframes used in behavioural and modeling analyses (in B_GLMMs.Rmd and things in Modeling folder). 
+The script used the data from Jenna (food, social, temporal discounting) and Yang et al., 2022 (clothing). Since the script relies on the data organized by other scripts (e.g., Behaviour/A_Preprocess.Rmd), WE HAVE TO RERUN THIS SCRIPT if any change in those files is made. 
 
-Original xlsx and csv files can provided upon request. Variables collected but not considered in our analyses include: menstrual cycle (all information to estimate cycle), estimated last meal intake (what, how much and when) as well as usual breakfast routine (how often, what and when). All other variables are contained in the .RData files.
+** RERUN THIS SCRIPT if any change in Behaviour/A_Preprocess.Rmd is made. 
 
-### Variables
+### Inputs and Variables
 ```{r}
-# TBA
-# List of variables needed for the GLMM (and cognitive modeling)
-# value difference (VD) of each attribute: up_vd, down_vd
-# proportion of fixation: fixProp1-4
-# dwell time difference (dwelldiff) of each attribute: up_dwelldiff, down_dwelldiff
+# Inputs: 
+# ../data/fromYang2022/Brand_Data_Clean.RData"
+# ../data/food_modeling_data.RData
+# ../data/social_modeling_data.RData
+# ../data/discounting_modeling_data.RData
+
+# Outputs:
+# ../data/Clothing_data.RData
+# ../data/datasets.RData (this is the one contains all datasets from the sated condition)
 ```
 
 ### 1. Preparations
@@ -47,9 +50,6 @@ library(lmerTest)
 ### 2. Load Data 
 #### 2.1 Food, Social, Discount (sated condition only)
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
-#clear working environment
-rm(list=ls())
-
 # List of RData file names
 filelist <- c("food_modeling_data.RData","social_modeling_data.RData", "discount_modeling_data.RData")
 
