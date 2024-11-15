@@ -109,10 +109,10 @@ for (datafile in sated_object_name) {
     downleft_val <- trial_data$ngo_left
     downright_val <- trial_data$ngo_right
   } else if (grepl("discount", datafile)) {
-    upleft_fix <- trial_data$valueleft_fix # amount
-    upright_fix <- trial_data$valueright_fix # amount
-    downleft_fix <- trial_data$timeleft_fix # delay
-    downright_fix <- trial_data$timeright_fix # delay
+    upleft_fix <- trial_data$timeleft_fix # amount
+    upright_fix <- trial_data$timeright_fix # amount
+    downleft_fix <- trial_data$valueleft_fix # delay
+    downright_fix <- trial_data$valueright_fix # delay
     upleft_time <- trial_data$valueleft_time
     upright_time <- trial_data$valueright_time
     downleft_time <- trial_data$timeleft_time
@@ -156,7 +156,6 @@ for (datafile in sated_object_name) {
   } else if  (grepl("discount", datafile) & grepl("hungry", datafile)) {
     org_data_discount_hungry <- trial_data
   } 
-  
 }
 ```
 #### 2.2 Clothing
@@ -256,10 +255,7 @@ add_variables <- function(data, data_name){
   # inclusion criteria
   validT <- data$RT > 250 & is.na(data$RT) == 0
   data <- data[validT, ]
-  
-  # vd of each attribute (left vs. right)
-  data$up_vd <- data$upleft_val - data$upright_val
-  data$down_vd <- data$downleft_val - data$downright_val
+
   
   # dwell difference (left vs. right)
   data$up_dwelldiff <- data$upleft_time - data$upright_time
@@ -284,7 +280,21 @@ add_variables <- function(data, data_name){
       data$H <- rep(0,length(data$RT))
     }
     
+    # Rescale att. to range from 1 to 10
+    data$scl_upleft_val <- 1 + (data$upleft_val - min(data$upleft_val)) * (10 - 1) / (max(data$upleft_val) - min(data$upleft_val))
+    data$scl_upright_val <- 1 + (data$upright_val - min(data$upright_val)) * (10 - 1) / (max(data$upright_val) - min(data$upright_val))
+    data$scl_downleft_val <- 1 + (data$downleft_val - min(data$downleft_val)) * (10 - 1) / (max(data$downleft_val) - min(data$downleft_val))
+    data$scl_downright_val <- 1 + (data$downright_val - min(data$downright_val)) * (10 - 1) / (max(data$downright_val) - min(data$downright_val))
     
+  # reverse the value for time 
+    if (grepl("discount", data_name, ignore.case = TRUE)) {
+      data$scl_downleft_val <- 10-data$scl_downleft_val
+      data$scl_downright_val <- 10-data$scl_downright_val
+    }
+      
+    # vd of each attribute (left vs. right)
+  data$up_vd <- data$scl_upleft_val - data$scl_upright_val
+  data$down_vd <- data$scl_downleft_val - data$scl_downright_val
   
   # Initialize z_data
   z_data <- tibble()
@@ -376,7 +386,7 @@ for (name in names(datasets)) {
 }
 ```
 
-### 5 GLM
+### 5 GLMM
 [add descriptions]
 ```{r}
 rm(data_interested)
