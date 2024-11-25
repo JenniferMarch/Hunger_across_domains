@@ -413,7 +413,7 @@ options(lme4.warnOnlyOnce = FALSE)   # Muting warning repeats
 for (data_name in data_interested) {
   # Retrieve the dataset using `get`
   dataset <- get(data_name)
-  dataset <- dataset[dataset$up_dwelldiff >0 | dataset$down_dwelldiff >0, ]
+  dataset <- dataset[dataset$up_dwelldiff >0 & dataset$down_dwelldiff >0, ] # only consider the datapoint where both fixations are evaluated
   
   # Initialize a sublist for the current dataset
   glm_results[[data_name]] <- list()
@@ -477,4 +477,59 @@ for (data_name in data_interested) {
 
 # Print the coefficient summary
 print(coef_summary)
+```
+
+```{r}
+# List of datasets of interest
+data_interested <- list("data_clothing", "org_data_food_sated", "org_data_social_sated","org_data_discount_sated")
+# Initialize an empty list to store coefficient summaries for each dataset
+coef_individual_summary <- list()
+paired_ttest <- list()
+nonParam_test <- list()
+# Loop through each dataset in data_interested
+for (data_name in data_interested) {
+  # Check if model4 exists in the glm_results for the dataset
+  if ("model4" %in% names(glm_results[[data_name]])) {
+    model <- glm_results[[data_name]][["model4"]]
+    
+        # Extract participant-specific betas
+    subject_effects <- ranef(model)$subject
+    fixed_effects <- fixef(model)
+    
+ # Calculate coefficients for UpFixation and DownFixation for each subject
+    participant_betas <- data.frame(
+      subject = rownames(subject_effects),
+      beta_UpFixation = fixed_effects["z_up_fixpropdiff"] + subject_effects[, 1],  
+      beta_DownFixation = fixed_effects["z_down_fixpropdiff"] + subject_effects[, 1] 
+    )
+    
+    # Append the participant_betas data frame to the summary list using the dataset name as the key
+    coef_individual_summary[[data_name]] <- participant_betas
+    
+    any(is.na(participant_betas$beta_UpFixation))
+any(is.na(participant_betas$beta_DownFixation))
+
+if (length(unique(participant_betas$beta_UpFixation)) == 1 ||
+    length(unique(participant_betas$beta_DownFixation)) == 1) {
+    message("Data is constant. Mean for UpFixation: ", mean(participant_betas$beta_UpFixation),
+            ", Mean for DownFixation: ", mean(participant_betas$beta_DownFixation))
+}
+
+
+if (sd(participant_betas$beta_UpFixation) < 1e-10 ||
+    sd(participant_betas$beta_DownFixation) < 1e-10) {
+    message("Data has insufficient variability for t-test.")
+}
+
+    #aired_ttest[[data_name]] <- t.test(participant_betas$beta_UpFixation, participant_betas$beta_DownFixation,
+     #  mu = 0, 
+      # paired = TRUE,   
+       #var.equal = TRUE,
+       #conf.level = 0.95)
+
+nonParam_test[[data_name]] <- wilcox.test(participant_betas$beta_UpFixation, participant_betas$beta_DownFixation)
+
+  }
+}
+
 ```
