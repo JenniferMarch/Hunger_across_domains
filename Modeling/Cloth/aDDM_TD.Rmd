@@ -212,13 +212,13 @@ phy2 <- pnorm(ddm_results$BUGSoutput$sims.list$mu_phy2)
 ```{r}
 # List of variable names, labels, and binwidths for each plot
 est_parameters <- list(
-  list(name = "weight1", label = "Amount Weight", binwidth = 1/500, maxY = 500),
-  list(name = "drift", label = "Drift Scaling", binwidth = 1/400, maxY = 500),
+  list(name = "weight1", label = "Amount Weight", binwidth = 1/1000, maxY = 500),
+  list(name = "drift", label = "Drift Scaling", binwidth = 1/1000, maxY = 500),
   list(name = "boundSep", label = "Boundary Separation", binwidth = 1/300, maxY = 500),
-  list(name = "ndt", label = "Non-Decision Time", binwidth = 1/150, maxY = 500),
-  list(name = "theta", label = "Theta", binwidth = 1/850, maxY = 500),
-  list(name = "phy", label = "phy", binwidth = 1/800, maxY = 250),
-  list(name = "phy2", label = "phy2", binwidth = 1/800, maxY = 250)
+  list(name = "ndt", label = "Non-Decision Time", binwidth = 1/1000, maxY = 500),
+  list(name = "theta", label = "Theta", binwidth = 1/1000, maxY = 500),
+  list(name = "phy", label = "phy", binwidth = 1/1000, maxY = 250),
+  list(name = "phy2", label = "phy2", binwidth = 1/1000, maxY = 250)
 )
 
 # List to store plots
