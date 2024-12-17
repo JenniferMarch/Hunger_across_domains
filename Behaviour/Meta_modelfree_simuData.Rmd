@@ -1,0 +1,1133 @@
+---
+title: "Meta_modelfree_simuData"
+output: html_document
+date: "2024-10-23"
+---
+### Information
+The script is modified from Meta_modelfree.Rmd and aims to analyzed simulated data from the folder: sim_data
+
+** RERUN THIS SCRIPT if any change in sim_data is made
+
+### Inputs and Variables
+```{r}
+# Inputs: 
+# ../sim_data/simData_social.RData"
+# ../sim_data/simData_food.RData
+
+# Outputs:
+# ../sim_data/datasets.RData (this is the one contains all datasets from the sated condition)
+```
+
+### 1. Preparations
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(readxl)
+library(ggpubr)
+library(rstatix)
+library(readr)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library (ggplot2)
+library(tibble)
+library(rstatix)
+library(tidyverse)
+library(ez) #
+library(lme4)
+library(lmerTest)
+
+```
+
+### 2. Load Data 
+#### 2.1 simulated Food, Social
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# List of RData file names
+filelist <- c("simData_social.RData","simData_food.RData")
+
+# Loop through each RData file
+for (file in filelist) {
+  
+  # Load the RData file
+  load(paste0("../sim_data/", file))
+  
+  # Get all objects in the current environment
+  loaded_objects <- ls()
+  
+  # Find the object that matches the pattern "simDat_*". Should be six names in sim_object_name
+  # 2 tasks x three conditions (1phi, 2phi_2 and 2phi_8)
+  sim_object_name <- grep("simDat_.", loaded_objects, value = TRUE)
+}
+
+#initialize data
+sim_data_food_sated <- tibble(); sim_data_food_hungry <- tibble()
+sim_data_social_sated <- tibble(); sim_data_social_hungry <- tibble()
+#org_data_discount_sated <- tibble(); org_data_discount_hungry <- tibble()
+
+condList <-  c("hungry","sated");
+# start rearrange data so that different datasets have the same variable names
+for (datafile in sim_object_name) {
+  for (cond in condList) {
+    rm(trial_data)
+    rm(tempData)
+    trial_data <- get(datafile)
+    trial_data <- trial_data[[cond]]
+    
+    # keep useful variables in tempData
+    tempData <-
+      trial_data %>% select(subject, rts, resp) #subject, RT, response
+    
+        # relabel useful variables in trial_data
+    upleft_fix <- trial_data$foodleft_fix # food
+    upright_fix <- trial_data$foodright_fix # food
+    downleft_fix <- trial_data$nutrileft_fix # nutrition
+    downright_fix <- trial_data$nutriright_fix # nutrition
+    upleft_time <- trial_data$foodleft_time
+    upright_time <- trial_data$foodright_time
+    downleft_time <- trial_data$nutrileft_time
+    downright_time <- trial_data$nutriright_time
+    upleft_val <- trial_data$taste_left
+    upright_val <- trial_data$taste_right
+    downleft_val <- trial_data$health_left
+    downright_val <- trial_data$health_right
+  }
+}
+
+
+  
+  if (grepl("neu", datafile)) { 
+    
+  } else if (grepl("social", datafile)) { 
+    upleft_fix <- trial_data$selfleft_fix # self
+    upright_fix <- trial_data$selfright_fix # self
+    downleft_fix <- trial_data$ngoleft_fix # ngo
+    downright_fix <- trial_data$ngoright_fix # ngo
+    upleft_time <- trial_data$selfleft_time
+    upright_time <- trial_data$selfright_time
+    downleft_time <- trial_data$ngoleft_time
+    downright_time <- trial_data$ngoright_time
+    upleft_val <- trial_data$self_left
+    upright_val <- trial_data$self_right
+    downleft_val <- trial_data$ngo_left
+    downright_val <- trial_data$ngo_right
+  } else if (grepl("discount", datafile)) {
+    upleft_fix <- trial_data$timeleft_fix # amount
+    upright_fix <- trial_data$timeright_fix # amount
+    downleft_fix <- trial_data$valueleft_fix # delay
+    downright_fix <- trial_data$valueright_fix # delay
+    upleft_time <- trial_data$valueleft_time
+    upright_time <- trial_data$valueright_time
+    downleft_time <- trial_data$timeleft_time
+    downright_time <- trial_data$timeright_time
+    upleft_val <- trial_data$value_left
+    upright_val <- trial_data$value_right
+    downleft_val <- trial_data$time_left
+    downright_val <- trial_data$time_right
+  }
+  
+  # Create a new row as a data frame
+  new_row <- data.frame(
+    upleft_val = upleft_val, 
+    upright_val = upright_val, 
+    downleft_val = downleft_val, 
+    downright_val = downright_val,
+    response = as.numeric(trial_data$response == "left"), #1: left; 0: right
+    upleft_fix = upleft_fix,
+    upright_fix = upright_fix,
+    downleft_fix = downleft_fix,
+    downright_fix = downright_fix,
+    upleft_time = upleft_time, # will be reversed in Section3.2
+    upright_time = upright_time, # will be reversed in Section3.2
+    downleft_time = downleft_time,
+    downright_time = downright_time,
+    stringsAsFactors = FALSE  # Ensure character variables are not converted to factors
+  )
+  trial_data <- cbind(tempData, new_row)
+  
+  # store the data to corresponding task/condition
+  if (grepl("_neu", datafile) & grepl("sated", datafile)) {
+    org_data_food_sated <- trial_data
+  } else if  (grepl("_neu", datafile) & grepl("hungry", datafile)) {
+    org_data_food_hungry <- trial_data
+  } else if (grepl("social", datafile) & grepl("sated", datafile)) {
+    org_data_social_sated <- trial_data
+  } else if  (grepl("social", datafile) & grepl("hungry", datafile)) {
+    org_data_social_hungry <- trial_data
+  } else if  (grepl("discount", datafile) & grepl("sated", datafile)) {
+    org_data_discount_sated <- trial_data
+  } else if  (grepl("discount", datafile) & grepl("hungry", datafile)) {
+    org_data_discount_hungry <- trial_data
+  } 
+}
+```
+#### 2.2 Clothing
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# data from https://osf.io/d7s6c/ and https://osf.io/f2urs/
+# Upleftval/ uprightval/ downleftval/downrightval: preferential ratings of the options at different positions
+# ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
+# NOTE: 
+#   choice: left option is chosen (0 or 1)
+#   coding: up: cloth's rating; down: brand's rank (20 levels)
+
+# Load data
+# data_raw_clothing <- read.csv("../data/moneyrisk.csv") 
+load("../data/fromYang2022/Brand_Data_Clean.RData")
+
+# Create empty dataframes for each category
+data_clothing <- tibble()
+
+# Read in data for all participants in all conditions
+# summarize the dwell time for each attribute in each trial (so far the fixation times are stored separately within a trial)
+subjlist <- seq_along(brand_present_sub)
+for (subject in subjlist) {
+  # Get the subject number from the file name
+  subdata <- brand_present_sub[[subject]]
+  Ntrial <- sum(subdata$fixnum == 1)
+  # Identify indices where fixnum == 1
+  indices <- which(subdata$fixnum == 1)
+  
+  # Create a sequence of labels (1, 2, 3, etc.) of the same length as identified indices
+  labels <- seq_along(indices)
+  
+  # Assign these labels to a new column 'fixation_label'
+  subdata$trial <- NA  # Create a new column initialized with NA
+  subdata$trial[indices] <- labels  # Assign labels to the identified rows
+  
+  for (t in 1:Ntrial) {
+    if (t<Ntrial) {
+      trial_start <- which(subdata$trial == t)
+      trial_end <- which(subdata$trial == (t+1))-1
+    } else {
+      trial_start <- which(subdata$trial == t)
+      trial_end <- nrow(subdata)
+    }
+    trial_data <- subdata[trial_start:trial_end, ]
+    Nfix <-  unique(trial_data$fixnum)
+    
+    #list of variables
+    # note: ROI: currently gazed location (1: upper left 2: upper right 3: down left 4: down right). 
+    upleft_fix <- sum(trial_data$roi == 1) # cloth's rating
+    upright_fix <- sum(trial_data$roi == 2)  # cloth's rating
+    downleft_fix <- sum(trial_data$roi == 3) # brand's rank
+    downright_fix <- sum(trial_data$roi == 4) # brand's rank 
+    upleft_time <- sum(trial_data$fixdur[trial_data$roi == 1])
+    upright_time <- sum(trial_data$fixdur[trial_data$roi == 2])
+    downleft_time <- sum(trial_data$fixdur[trial_data$roi == 3])
+    downright_time <- sum(trial_data$fixdur[trial_data$roi == 4])
+    upleft_val <- trial_data$upleftval[1]
+    upright_val <- trial_data$uprightval[1]
+    downleft_val <- trial_data$downleftval[1]
+    downright_val <- trial_data$downrightval[1]
+    
+    
+    # Create a new row as a data frame
+    new_row <- data.frame(
+      subject = subject,
+      trial = t,
+      upleft_val = upleft_val, # cloth's rating
+      upright_val = upright_val, # cloth's rating
+      downleft_val = downleft_val, # brand's rank
+      downright_val = downright_val, # brand's rank
+      response = trial_data$choice[1], #1: left; 0: right
+      RT =  trial_data$rt[1],
+      upleft_fix = upleft_fix,
+      upright_fix = upright_fix,
+      downleft_fix = downleft_fix,
+      downright_fix = downright_fix,
+      upleft_time = upleft_time,
+      upright_time = upright_time,
+      downleft_time = downleft_time,
+      downright_time = downright_time,
+      stringsAsFactors = FALSE  # Ensure character variables are not converted to factors
+    )
+    data_clothing <- rbind(data_clothing, new_row)
+  }
+}
+```
+
+### 3. Add additional info to  dataframes
+Include:
+- Value differences
+- dwell time difference
+- dwell time bins (at option level and attribute level)
+- zscored dwell difference for each subjects
+- proportion of dwell time
+#### 3.1 functions
+```{r}
+calculate_bins <- function(left_time, right_time) {
+  fix_sum <- left_time + right_time 
+  fix_diff <- left_time - right_time
+  if (sum(fix_sum != 0) > 0) {
+    bin_sep <- seq(min(fix_diff), max(fix_diff), length.out = 6)
+    bins <- cut(fix_diff, breaks = bin_sep, labels = 1:5, include.lowest = TRUE)
+    bindata <- bins
+  } else {
+    bindata <- rep(NaN, length(left_time))
+  }
+  return(bindata)
+}
+```
+
+#### 3.2 add variables
+```{r}
+add_variables <- function(data, data_name) {
+  # inclusion criteria
+  validT <- data$RT > 250 & is.na(data$RT) == 0
+  data <- data[validT,]
+  
+  
+  # dwell difference (left vs. right)
+  data$up_dwelldiff <- data$upleft_time - data$upright_time
+  data$down_dwelldiff <- data$downleft_time - data$downright_time
+  
+  # proportion of dwell time
+  allfixtime <-
+    data$upleft_time + data$upright_time + data$downleft_time + data$downright_time
+  data$fixProp1 <- data$upleft_time / allfixtime
+  data$fixProp2 <- data$upright_time / allfixtime
+  data$fixProp3 <- data$downleft_time / allfixtime
+  data$fixProp4 <- data$downright_time / allfixtime
+  data$up_fixpropdiff <-
+    data$fixProp1 - data$fixProp2 #(left vs. right)
+  data$down_fixpropdiff <-
+    data$fixProp3 - data$fixProp4 #(left vs. right)
+  
+  # more information for model-based analysis
+  chooseR <- data$response == 0
+  data$RT_right <- data$RT
+  data$RT_right[chooseR] <- data$RT_right[chooseR] * -1
+  if (grepl("hungry", data_name, ignore.case = TRUE)) {
+    data$H <- rep(1, length(data$RT))
+  } else {
+    data$H <- rep(0, length(data$RT))
+  }
+  
+  # Rescale att. to range from 1 to 10
+  data$scl_upleft_val <-
+    1 + (data$upleft_val - min(data$upleft_val)) * (10 - 1) / (max(data$upleft_val) - min(data$upleft_val))
+  data$scl_upright_val <-
+    1 + (data$upright_val - min(data$upright_val)) * (10 - 1) / (max(data$upright_val) - min(data$upright_val))
+  data$scl_downleft_val <-
+    1 + (data$downleft_val - min(data$downleft_val)) * (10 - 1) / (max(data$downleft_val) - min(data$downleft_val))
+  data$scl_downright_val <-
+    1 + (data$downright_val - min(data$downright_val)) * (10 - 1) / (max(data$downright_val) - min(data$downright_val))
+  
+  # reverse the value for time
+  if (grepl("discount", data_name, ignore.case = TRUE)) {
+    data$scl_downleft_val <- 10 - data$scl_downleft_val
+    data$scl_downright_val <- 10 - data$scl_downright_val
+  }
+  
+  # vd of each attribute (left vs. right)
+  data$up_vd <- data$scl_upleft_val - data$scl_upright_val
+  data$down_vd <- data$scl_downleft_val - data$scl_downright_val
+  
+  # Initialize z_data
+  z_data <- tibble()
+  count <- 0
+  # Get unique subjects
+  subjlist <- unique(data$subject)
+  for (s in subjlist) {
+    # Create a subset for the current subject
+    subjdata <- data[data$subject == s,]
+    
+    # relabel subject numbers from 1 to N
+    count <- count + 1
+    subjdata$P_subj <- rep(count, length(subjdata$RT))
+    
+    
+    # Label Dwell time difference bins
+    subjdata$option_fixdiff_bin <-
+      calculate_bins(
+        subjdata$upleft_time + subjdata$downleft_time,
+        subjdata$upright_time + subjdata$downright_time
+      )
+    
+    subjdata$up_attribute_fixdiff_bin <-
+      calculate_bins(subjdata$upleft_time,
+                     subjdata$upright_time)
+    
+    subjdata$down_attribute_fixdiff_bin <-
+      calculate_bins(subjdata$downleft_time,
+                     subjdata$downright_time)
+    
+    
+    
+    # Calculate z-scores for each variable
+    subjdata$z_up_vd <- scale(subjdata$up_vd)[, 1]
+    subjdata$z_down_vd <- scale(subjdata$down_vd)[, 1]
+    subjdata$z_up_dwelldiff <- scale(subjdata$up_dwelldiff)[, 1]
+    subjdata$z_down_dwelldiff <- scale(subjdata$down_dwelldiff)[, 1]
+    subjdata$z_up_fixpropdiff <- scale(subjdata$up_fixpropdiff)[, 1]
+    subjdata$z_down_fixpropdiff <-
+      scale(subjdata$down_fixpropdiff)[, 1]
+    subjdata$z_option_fixdiff <-
+      scale(subjdata$up_dwelldiff + subjdata$down_dwelldiff)[, 1]
+    subjdata$z_attribute_fixdiff <-
+      scale((subjdata$upleft_time + subjdata$upright_time) - (subjdata$downleft_time +
+                                                                subjdata$downright_time)
+      )[, 1]
+    subjdata$z_option_fixpropdiff <-
+      scale(subjdata$up_fixpropdiff + subjdata$down_fixpropdiff)[, 1]
+    subjdata$z_attribute_fixpropdiff <-
+      scale((subjdata$fixProp1 + subjdata$fixProp2) - (subjdata$fixProp3 + subjdata$fixProp4)
+      )[, 1]
+    z_data <- rbind(z_data, subjdata)
+    
+    
+  }
+  return(z_data)
+}
+
+# List of dataset names
+dataset_names <- c("org_data_food_sated", "org_data_food_hungry", "org_data_social_sated", "org_data_social_hungry", "org_data_discount_sated", "org_data_discount_hungry", "data_clothing")
+
+# Loop through the datasets and apply the add_variables function
+for (name in dataset_names) {
+  assign(name, add_variables(get(name), name))
+}
+
+# Save the modified datasets
+save(org_data_food_sated, org_data_food_hungry, org_data_social_sated, org_data_social_hungry, org_data_discount_sated, org_data_discount_hungry, data_clothing, file = "../data/datasets.RData")
+```
+
+### 4 desciptive and correlations
+[add descriptions]
+```{r}
+# clean the environment and load the organized data again
+rm(list=ls())
+load("../data/datasets.RData")
+
+# Create a list of your datasets
+datasets <- list(data_clothing = data_clothing, 
+                 data_food_sated = org_data_food_sated,
+                 data_food_hungry = org_data_food_hungry,
+                 data_social_sated = org_data_social_sated,
+                 data_social_hungry = org_data_social_hungry, 
+                 data_discount_sated = org_data_discount_sated,
+                 data_discount_hungry = org_data_discount_hungry)
+                 
+```
+
+#### 4.1 desciptive results
+```{r}
+# group means based on subject, choice, fixation time (upper attribute), fixation time (lower attribute)
+calculate_mean <- function(data){
+  results <- data %>%
+    group_by(subject) %>%
+    summarise(
+      mean_rt = mean(RT, na.rm = TRUE),       # Mean of 'rt'
+      mean_choice = mean(response, na.rm = TRUE),  # Mean of 'choice'
+      mean_dwellup = mean(fixProp1+fixProp2, na.rm = TRUE),
+      mean_dwelldown = mean(fixProp3+fixProp4, na.rm = TRUE),
+      mean_upfixPropdiff = mean(up_fixpropdiff, na.rm = TRUE),  # Mean of 'choice'
+      mean_downfixPropdiff = mean(down_fixpropdiff, na.rm = TRUE),       # Mean of 'rt'
+      #mean_choice = mean(choice, na.rm = TRUE)  # Mean of 'choice'
+    )
+  return(results)
+}
+
+
+# Initialize an empty list to store the results
+mean_data_list <- list()
+
+# Loop through each dataset in the list
+count <- 0
+mean_of_mean <- matrix(data = NA, nrow = length(names(datasets)), ncol = 7)
+for (name in names(datasets)) {
+  count <- count +1
+  # Compute the mean for the current dataset
+  mean_data_list[[name]] <- calculate_mean(datasets[[name]])
+  subdata <- mean_data_list[[name]] 
+  mean_of_mean[count, 1] <- name  # Store the dataset name
+  mean_of_mean[count, 2] <- mean(subdata$mean_rt)
+  mean_of_mean[count, 3] <- mean(subdata$mean_choice)
+  mean_of_mean[count, 4] <- mean(subdata$mean_dwellup)
+  mean_of_mean[count, 5] <- mean(subdata$mean_dwelldown)
+  mean_of_mean[count, 6] <- mean(subdata$mean_upfixPropdiff)
+  mean_of_mean[count, 7] <- mean(subdata$mean_downfixPropdiff)
+}
+```
+
+#### 4.2 correlation results
+``` {r}
+calculate_bin_mean <- function(data) {
+  results <- data %>%
+    group_by(subject, option_fixdiff_bin) %>%
+    summarise(mean_choice = mean(response, na.rm = TRUE), 
+              .groups = 'drop')  # Drop grouping after summarise
+  
+  results_att1 <- data %>%
+    group_by(subject, up_attribute_fixdiff_bin) %>%
+    summarise(mean_choice = mean(response, na.rm = TRUE), 
+              .groups = 'drop')  # Drop grouping after summarise
+  
+  results_att2 <- data %>%
+    group_by(subject, down_attribute_fixdiff_bin) %>%
+    summarise(mean_choice = mean(response, na.rm = TRUE), 
+              .groups = 'drop')  # Drop grouping after summarise
+  
+  return(
+    list(
+      results = results,
+      results_up_att = results_att1,
+      results_down_att = results_att2
+    )
+  )
+}
+
+# Initialize an empty list to store the results
+bin_mean_data_list <- list()
+
+# Loop through each dataset in the list
+count <- 0
+bin_mean_of_option <-
+  matrix(data = NA,
+         nrow = length(names(datasets)),
+         ncol = 5)
+bin_mean_of_att1 <-
+  matrix(data = NA,
+         nrow = length(names(datasets)),
+         ncol = 5)
+bin_mean_of_att2 <-
+  matrix(data = NA,
+         nrow = length(names(datasets)),
+         ncol = 5)
+level_name <- c("1","2","3","4","5")
+task_name <- names(datasets)
+
+for (name in task_name) {
+  count <- count + 1
+  bin_mean_data_list[[name]] <-
+    calculate_bin_mean(datasets[[name]])
+  subdata <- bin_mean_data_list[[name]]
+  
+  for (k in 1:5) {
+    binIDX_option <- which(subdata$results$option_fixdiff_bin == k & !is.na(subdata$results$option_fixdiff_bin))
+    binIDX_att1 <-
+      which(subdata$results_up_att$up_attribute_fixdiff_bin == k & !is.na(subdata$results_up_att$up_attribute_fixdiff_bin))
+    binIDX_att2 <-
+      which(subdata$results_down_att$down_attribute_fixdiff_bin == k & !is.na(subdata$results_down_att$down_attribute_fixdiff_bin))
+    
+    # Compute the mean for the current dataset
+    # bin_mean_of_option[count, k] <- name
+    bin_mean_of_option[count, k] <-
+      mean(subdata$results$mean_choice[binIDX_option])
+     colnames(bin_mean_of_option) <- level_name
+     rownames(bin_mean_of_option) <- task_name
+    
+      # bin_mean_of_att1[count, k] <- name
+    bin_mean_of_att1[count, k] <-
+      mean(subdata$results_up_att$mean_choice[binIDX_att1])
+    colnames(bin_mean_of_att1) <- level_name
+    rownames(bin_mean_of_att1) <- task_name
+    
+     # bin_mean_of_att2[count, k] <- name
+    bin_mean_of_att2[count, k] <-
+      mean(subdata$results_down_att$mean_choice[binIDX_att2])
+     colnames(bin_mean_of_att2) <- level_name
+     rownames(bin_mean_of_att2) <- task_name
+  }
+}
+```
+
+#### 4.3 results visualization
+```{r}
+# proportion of dwell time on each attribute (will be compared with weighting in section 5)
+
+
+# Prob. (First fixation on each attribute)
+
+# Association of dwell time difference and choice
+## load data (with/without loop)
+vd_types <- c("option dwell diff (L>R)", "att_up dwell diff (L>R)", "att_down dwell diff (L>R)")
+temp_bin <- bin_mean_of_att2
+vd_type <- vd_types[3]
+## the data are reorganized as a multi-row variables with task and five levels of VD
+bin_data_ext <- function(D, task_name, level_name) {
+  bin_mean_extension <-
+    data.frame(
+      Task = rep(task_name, each = length(level_name)),
+      Level = rep(level_name, times = length(task_name)),
+      Probability = as.vector(t(as.matrix(D)))
+    )
+  #bin_mean_extension$Task <- factor(bin_mean_extension$Task)
+  bin_mean_extension$Level <- factor(bin_mean_extension$Level)
+  return(bin_mean_extension)
+}
+
+## load reshape the data
+bin_long <- bin_data_ext(temp_bin, task_name, level_name)
+
+## Function to plot tasks (you can decide task type: "clothing" "Food" "Social" "Discount")
+vd_choice_plot <- function(data, task_type, vd_type) {
+  task_filter <- grepl(task_type, data$Task)
+  
+  ### Filter by task type
+  data_filtered <- data[task_filter,]
+  
+  ### Check if there are any tasks to plot
+  if (nrow(data_filtered) == 0) {
+    message(paste("No tasks found for:", task_type))
+    return(NULL)
+  }
+  
+  # Determine task conditions
+  if  (any(data_filtered$Task == "data_clothing")) {
+    data_filtered$Condition <- rep("Sated",5)
+  } else {
+    data_filtered$Condition <- ifelse(grepl("sated", data_filtered$Task), "Sated", "Hungry")
+  }
+  
+  
+  ### Initialize the plot
+  p <- ggplot(data_filtered, aes(x = Level, y = Probability, group = Task, color = Condition)) +
+       geom_line(aes(linetype = Condition)) +
+       labs(title = paste(task_type, "Tasks"), x = vd_type, y = "P (Left)") +
+       theme_minimal() +
+       scale_linetype_manual(values = c("Sated" = "solid", "Hungry" = "dashed")) +
+        ylim(0, 1) +  # Set y-axis range
+       scale_color_manual(values = c("Sated" = "blue", "Hungry" = "red")) +
+       guides(linetype = guide_legend(title = "Condition"), color = guide_legend(title = "Condition"))
+  
+  
+  print(p)
+}
+
+# Plot for "clothing"
+vd_choice_plot(bin_long, "clothing", vd_type)
+vd_choice_plot(bin_long, "food", vd_type)
+vd_choice_plot(bin_long, "social", vd_type)
+vd_choice_plot(bin_long, "discount", vd_type)
+# dwellUP <- vd_choice_plot()
+# dwellDOWN <- vd_choice_plot()
+# dwellOPTION <- vd_choice_plot()
+
+```
+
+#### 4.5 try later
+```{r}
+vd_choice_plot_combined <- function(data, task_types, vd_type) {
+  # Create an empty dataframe to store combined data
+  combined_data <- data.frame()
+
+  # Loop over each task type to filter and prepare data
+  for (task_type in task_types) {
+    task_filter <- grepl(task_type, data$Task)
+    
+    #Filter by task type
+    data_filtered <- data[task_filter,]
+    
+    #Check if there are any tasks to plot
+    if (nrow(data_filtered) == 0) {
+      message(paste("No tasks found for:", task_type))
+      next
+    }
+    
+    # Determine task conditions
+    if (any(data_filtered$Task == "clothing")) {
+      data_filtered$Condition <- "Sated"
+    } else {
+      data_filtered$Condition <- ifelse(grepl("sated", data_filtered$Task), "Sated", "Hungry")
+    }
+    
+    # Add a column to indicate the task type for distinguishing in the plot
+    data_filtered$TaskType <- task_type
+    
+    # Add filtered data to combined dataframe
+    combined_data <- rbind(combined_data, data_filtered)
+  }
+
+  #Initialize the combined plot
+  if (nrow(combined_data) > 0) {
+    p <- ggplot(combined_data, aes(x = Level, y = Probability, group = interaction(TaskType, Task), color = Condition)) +
+      geom_line(aes(linetype = Condition)) +
+      labs(title = "Tasks Overview", x = vd_type, y = "P (Left)") +
+      theme_minimal() +
+      scale_linetype_manual(values = c("Sated" = "solid", "Hungry" = "dashed")) +
+      ylim(0, 1) +
+      scale_color_manual(values = c("Sated" = "blue", "Hungry" = "red")) +
+      guides(linetype = guide_legend(title = "Condition"), color = guide_legend(title = "Condition")) +
+      facet_wrap(~TaskType, ncol = 1)  # Faceting by TaskType to show them distinctly
+
+    print(p)
+  } else {
+    message("No tasks found for any of the provided task types.")
+  }
+}
+```
+
+### 5 Regression models
+```{r}
+# basic settings
+rm(data_interested)
+data_interested <- list("data_clothing", "org_data_food_sated", "org_data_food_hungry", "org_data_social_sated", "org_data_social_hungry","org_data_discount_sated", "org_data_discount_hungry")
+
+# Define the models as a list of formulas
+GLMM_model_formulas <- list(
+  model1 = response ~ z_up_vd + z_down_vd + (1 | subject),
+  
+  model2 = response ~ z_up_vd + z_down_vd + z_up_dwelldiff + z_down_dwelldiff + (1 | subject),
+  
+  model3 = response ~ z_up_vd + z_down_vd + z_up_fixpropdiff + z_down_fixpropdiff + (1 |subject)
+)
+
+GLM_model_formulas <- list(
+  model1 = response ~ z_up_vd + z_down_vd,
+  
+  model2 = response ~ z_up_vd + z_down_vd + z_up_dwelldiff + z_down_dwelldiff,
+  
+  model3 = response ~ z_up_vd + z_down_vd + z_up_fixpropdiff + z_down_fixpropdiff
+)
+
+# Initialize a list to store all glm results by dataset and model type
+glmm_results <- list()
+glm_ind_results <- list()
+
+# Initialize an empty list to store AIC results
+aic_glmm <- data.frame(dataset = character(), model = character(), aic = numeric(), stringsAsFactors = FALSE)
+aic_glm_ind <- data.frame(dataset = character(), model = character(), subjID = numeric(), aic = numeric(), stringsAsFactors = FALSE)
+
+# Setting global options to mute specific warnings
+options(lme4.warnOnlyOnce = FALSE)   # Muting warning repeats
+```
+
+
+#### 5.1 GLMM
+Run GLMM at the group level. 
+```{r}
+# Loop through each dataset
+for (data_name in data_interested) {
+  # Retrieve the dataset using `get`
+  dataset <- get(data_name)
+  dataset[((dataset$upleft_time + dataset$upright_time) > 0 |
+                (dataset$downleft_time + dataset$downright_time) > 0),] # only consider the datapoint where both fixations are evaluated
+  
+  # Initialize a sublist for the current dataset
+  glmm_results[[data_name]] <- list()
+  
+  # Loop through each model formula
+  for (model_name in names(GLMM_model_formulas)) {
+    formula <- GLMM_model_formulas[[model_name]]
+     glmm_results[[data_name]][[model_name]] <- list()
+     
+    # Run the GLMM model and store the result
+    glmm_results[[data_name]][[model_name]] <- glmer(
+      formula,
+      data = dataset,
+      family = binomial(link = "logit"),
+      control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 5e5))
+    )
+    
+    # Extract the AIC value
+    aic_value <- AIC(glmm_results[[data_name]][[model_name]])
+    
+    # Append the AIC value to the results data frame
+    aic_glmm <- rbind(aic_glmm, data.frame(dataset = data_name, model = model_name, aic = aic_value))
+  }
+}
+  
+# aic_glm_ind suggest that modelX is the best model to explain choice for all datasets!
+```
+
+#### 5.2 GLM_individual
+Run GLM at the individual level.
+```{r}
+aic_glm_ind <- list()
+minTrial <- 15
+
+# Loop through each model formula
+for (model_name in names(GLM_model_formulas)) {
+  formula <- GLM_model_formulas[[model_name]]
+  
+  # Loop through each dataset
+  for (data_name in data_interested) {
+    glm_ind_results[[data_name]][[model_name]] <- list()
+    # Retrieve the dataset using `get`
+    dataset <- get(data_name)
+    dataset <-
+      dataset[((dataset$upleft_time + dataset$upright_time) > 0 |
+                (dataset$downleft_time + dataset$downright_time) > 0),] # only consider the datapoint where both fixations are evaluated
+    subjlist <- unique(dataset$subject)
+    
+    for (s in subjlist) {
+      subjData <- dataset[dataset$subject == s, ]
+      
+     
+      # Initialize a sublist for the current dataset
+      glm_ind_results[[data_name]][[model_name]][[as.character(s)]]  <- list()
+      
+      # Create the message using paste
+      message <-
+        paste("run_", data_name, ", model= ", model_name, ", subject = ", s, sep = "")
+      
+      # Print the message
+      print(message)
+      
+       if (sum((subjData$upleft_time+subjData$upright_time)>0)>minTrial & 
+           sum((subjData$downleft_time+subjData$downright_time)>0)>minTrial){
+      # Run the GLM model and store the result
+      glm_ind_results[[data_name]][[model_name]][[as.character(s)]]  <-
+        glm(formula,
+            data = subjData,
+            family = binomial(link = "logit")
+      )
+      
+      # Extract the AIC value for checking purpose (make sure it looks "normal")
+      aic_value <-
+        AIC(glm_ind_results[[data_name]][[model_name]][[as.character(s)]])
+      
+      # Append the AIC value to the results data frame
+      aic_glm_ind <-
+        rbind(aic_glm_ind,
+              data.frame(
+                dataset = data_name,
+                model = model_name,
+                subjID = s,
+                aic = aic_value
+              ))
+       } else {
+         glm_ind_results[[data_name]][[model_name]][[as.character(s)]]  <- NA
+               aic_glm_ind <-
+        rbind(aic_glm_ind,
+              data.frame(
+                dataset = data_name,
+                model = model_name,
+                subjID = s,
+                aic = NA
+              ))
+       }
+    }
+  }
+}
+# Save GLM results
+# Define file name
+file_name <- paste0("GLMresults_minTrial_", minTrial, ".Rdata")
+save(data_interested, GLM_model_formulas, glm_ind_results, aic_glm_ind, file = file_name)
+# aic_glm_ind suggest that modelX is the best model to explain choice for all datasets!
+```
+
+#### 5.3 Extract, Summarize and test coefficients
+```{r}
+# load GLM results
+rm(list = ls())
+load("../data/datasets.RData") # output of Section3: Add additional information
+load("GLMresults_minTrial_15.Rdata") # output of Section5.2s: GLM_individual ..
+
+
+# Function to extract coefficients
+coef_extract <- function(glmData) {
+  convergence_status <- glmData$converged
+  coefficients <- coef(glmData)
+  
+  return(list(converged = convergence_status, coefficients = coefficients))
+}
+
+# Function to remove outliers of coefficients using the IQR method
+remove_outliers <- function(data) {
+  Q1 <- quantile(data, 0.25)
+  Q3 <- quantile(data, 0.75)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  filtered_data <- data[data >= lower_bound & data <= upper_bound]
+  return(filtered_data)
+}
+
+# Initialize a list to hold the results
+coef_summary <- list()
+coef_ttest <- list()
+coef_data <- list()
+# loop for each task, model, subjects
+for (data_name in data_interested) {
+  coef_summary[[data_name]] <- list()
+  coef_ttest[[data_name]] <- list()
+  count <- 0 # for number of models
+  
+  for (model_name in names(GLM_model_formulas)) {
+    coef_summary[[data_name]][[model_name]] <- list()
+    coef_ttest[[data_name]][[model_name]] <- list()
+    coef_group <- data.frame()
+    formula <- GLM_model_formulas[[model_name]]
+    predictors <-
+      terms(formula) # Create a terms object which stores the parsed formula details
+    predictor_vars <-
+      rownames(attr(predictors, "factors")) # Extract the variables (right-hand side) using all.vars() on the RHS
+    predictor_vars[1] <- "Intercept"
+    nCoefModel <- length(predictor_vars)
+    dataset <- get(data_name)
+    subjlist <- unique(dataset$subject)
+    
+    for (s in subjlist) {
+      glmData <-
+        glm_ind_results[[data_name]][[model_name]][[as.character(s)]]
+      
+      if (!identical(glmData, NA) & !identical(glmData, NULL)) {
+        coef_temp <-
+          coef_extract(glmData)
+      } else {
+        coef_temp <-
+          list(converged = NA,
+               coefficients = rep(NA, nCoefModel))
+      }
+      
+      # Create a named list of coefficients for clarity
+      coeff_list <-
+        setNames(as.list(coef_temp$coefficients), predictor_vars)
+      
+      # Organize the data into the proper structure
+      data_row <-
+        c(subject_id = s,
+          converged = coef_temp$converged,
+          coeff_list)
+      coef_group <-
+        rbind(coef_group, data.frame(t(data_row), stringsAsFactors = FALSE))
+      
+      coef_summary[[data_name]][[model_name]] <- coef_group
+    }
+    
+    # mean, sd, ttest (deviate from 0 or not) for each coefficients
+    coef_temp_all <-
+      matrix(NA, nrow = length(subjlist), ncol = nCoefModel)
+    valid_sub <-
+      which(
+        as.numeric(coef_group$converged) == 1 &
+          abs(as.numeric(coef_group$Intercept)) < 100 &
+          abs(as.numeric(coef_group$Intercept)) > 0.0001
+      )
+    n_valid_subj <- length(valid_sub)
+    valid_coef <-
+      matrix(NA, nrow = n_valid_subj, ncol = nCoefModel)
+    t_test_results <-
+      matrix(NA, nrow = 6, ncol = nCoefModel)
+    t_test_filt_results <-
+      matrix(NA, nrow = 6, ncol = nCoefModel)
+    
+    for (np in c(1:nCoefModel)) {
+      coef_temp_all[, np] <- as.numeric(coef_group[[predictor_vars[np]]])
+      valid_coef[, np] <- coef_temp_all[valid_sub, np]
+      
+      # Filtering data to remove outliers
+      filtered_data <- remove_outliers(valid_coef[, np])
+      
+      # ttest for each individual predictor
+      t_test <- t.test(valid_coef[, np], mu = 0)
+      
+      # summary of ttest results
+      t_test_results[1, np] <-  as.numeric(t_test$estimate)
+      t_test_results[2, np] <-  as.numeric(t_test$conf.int[1])
+      t_test_results[3, np] <-  as.numeric(t_test$conf.int[2])
+      t_test_results[4, np] <-  as.numeric(t_test$statistic)
+      t_test_results[5, np] <-  as.numeric(t_test$parameter)
+      t_test_results[6, np] <-  t_test$p.value
+      
+      
+      t_test_filt <- t.test(filtered_data, mu = 0)
+      t_test_filt_results[1, np] <-
+        as.numeric(t_test_filt$estimate)
+      t_test_filt_results[2, np] <-
+        as.numeric(t_test_filt$conf.int[1])
+      t_test_filt_results[3, np] <-
+        as.numeric(t_test_filt$conf.int[2])
+      t_test_filt_results[4, np] <-
+        as.numeric(t_test_filt$statistic)
+      t_test_filt_results[5, np] <-
+        as.numeric(t_test_filt$parameter)
+      t_test_filt_results[6, np] <-  t_test_filt$p.value
+    }
+    
+    colnames(t_test_results) <- predictor_vars
+    rownames(t_test_results) <-
+      c("mean",
+        "lower_conf.",
+        "higherr_conf.",
+        "t-value",
+        "df",
+        "p-value")
+    coef_ttest[[data_name]][[model_name]][["ttest"]] <-
+      t_test_results
+    coef_ttest[[data_name]][[model_name]][["raw"]] <- valid_coef
+    coef_ttest[[data_name]][[model_name]][["ttest_filter"]] <-
+      t_test_filt_results
+    
+    # add variables for the visualization
+    desired_order <- predictor_vars
+    new_coef <- data.frame(
+      task = factor(rep(data_name, each = nCoefModel)),
+      predictor = factor(predictor_vars, levels = desired_order),
+      mean = coef_ttest[[data_name]][[model_name]][["ttest_filter"]][1, ],
+      l_conf = coef_ttest[[data_name]][[model_name]][["ttest_filter"]][2, ],
+      h_conf = coef_ttest[[data_name]][[model_name]][["ttest_filter"]][3, ],
+      t_val = coef_ttest[[data_name]][[model_name]][["ttest_filter"]][4, ],
+      p = coef_ttest[[data_name]][[model_name]][["ttest_filter"]][6, ]
+    )
+    coef_data[[model_name]] <- rbind(coef_data[[model_name]], new_coef)
+    
+    
+    # ttest for each parameter of interests
+    # comp_vars <- c("Beta_comparison (Up v.s. Down)", "Beta_DwellDiff_comparison (Up v.s. Down)")
+    # t_test_comp_vd <- t.test(valid_coef[, 2], valid_coef[, 3], paired = TRUE)
+    # new_comp <- data.frame(
+    #   task = factor(rep(data_name, each = nCoefModel)),
+    #   comp = factor(comp_vars),
+    #   mean_up = as.numeric(t_test_comp_vd$estimate[1]),
+    #    mean_down = as.numeric(t_test_comp_vd$estimate[2]),
+    #   l_conf =  as.numeric(t_test_comp_vd$conf.int[1]),
+    #   h_conf = as.numeric(t_test_comp_vd$conf.int[2]),
+    #   t_val = as.numeric(t_test_comp_vd$statistic),
+    #   p = t_test_comp_vd$p.value
+    # )
+    # coef_comp[[model_name]] <- rbind(coef_comp[[model_name]], new_comp)
+    coef_ttest[[data_name]][[model_name]][["Beta_comparison"]] <-
+      tibble(c(
+        as.numeric(t_test_comp_vd$estimate),
+        as.numeric(t_test_comp_vd$conf.int[1]),
+        as.numeric(t_test_comp_vd$conf.int[2]),
+        as.numeric(t_test_comp_vd$statistic),
+        as.numeric(t_test_comp_vd$parameter),
+        t_test_comp_vd$p.value
+      ))
+    if (model_name == "model1") {
+      coef_ttest[[data_name]][[model_name]][["Beta_DwellDiff_comparison"]]<-
+        rep('NA', 7, 1)
+      
+    } else {
+      t_test_comp_dwelldiff <-
+        t.test(valid_coef[, 4], valid_coef[, 5], paired = TRUE)
+      coef_ttest[[data_name]][[model_name]][["Beta_DwellDiff_comparison"]] <-
+        tibble(c(
+          as.numeric(t_test_comp_dwelldiff$estimate),
+          as.numeric(t_test_comp_dwelldiff$conf.int[1]),
+          as.numeric(t_test_comp_dwelldiff$conf.int[2]),
+          as.numeric(t_test_comp_dwelldiff$statistic),
+          as.numeric(t_test_comp_dwelldiff$parameter),
+          t_test_comp_dwelldiff$p.value
+        ))
+    }
+  }
+}
+```
+
+#### 5.5 GLM/GLMM results visualization
+```{r}
+Coef_plot <-
+  ggplot(coef_data[["model2"]], aes(x = predictor, y = t_val)) +
+  geom_point(size = 3) +  # Add points for means
+  facet_wrap( ~ task, ncol = 1, scales = "free_y") +  # Vertically stack each task's plot
+  ylim(-5, 20) +  # Set y-axis range
+  geom_hline(yintercept = 1.96, linetype = "dashed",linewidth = 1.5, color = "red") +  # Add horizontal line at t value of 2.16
+  labs(title = "Impact of attribute values and dwell time (Actual Dwell time with MODEL2)",
+       x = "Predictors",
+       y = "Coefficients (t-value)") +
+  theme_minimal()
+# }
+print(Coef_plot)
+    
+    
+```
+
+### 6 attribute weight and dwell-time allocation
+```{r}
+# List of datasets of interest
+data_interested <- list("data_clothing", "org_data_food_sated", "org_data_social_sated","org_data_discount_sated")
+# Initialize an empty data frame to store coefficient summaries
+coef_summary <- data.frame(dataset = character(), term = character(), estimate = numeric(), std_error = numeric(), z_value = numeric(), p_value = numeric(), stringsAsFactors = FALSE)
+
+# Loop through each dataset in data_interested
+for (data_name in data_interested) {
+  # Check if model4 exists in the glm_results for the dataset
+  if ("model4" %in% names(glm_results[[data_name]])) {
+    model <- glm_results[[data_name]][["model4"]]
+    
+    # Extract the summary of model4
+    model_summary <- summary(model)
+    
+    # Get coefficient estimates and standard errors
+    coef_data <- data.frame(
+      dataset = data_name,
+      term = rownames(model_summary$coefficients),
+      estimate = model_summary$coefficients[, "Estimate"],
+      std_error = model_summary$coefficients[, "Std. Error"],
+      z_value = model_summary$coefficients[, "z value"],
+      p_value = model_summary$coefficients[, "Pr(>|z|)"]
+    )
+    
+    # Append the coefficient data to the summary data frame
+    coef_summary <- rbind(coef_summary, coef_data)
+  } else {
+    message(paste("Model4 not found for dataset:", data_name))
+  }
+}
+
+# Print the coefficient summary
+print(coef_summary)
+```
+
+```{r}
+# List of datasets of interest
+data_interested <- list("data_clothing", "org_data_food_sated", "org_data_social_sated","org_data_discount_sated")
+# Initialize an empty list to store coefficient summaries for each dataset
+coef_individual_summary <- list()
+paired_ttest <- list()
+nonParam_test <- list()
+corr_test <- list()
+# Loop through each dataset in data_interested
+for (data_name in data_interested) {
+  # Check if model4 exists in the glm_results for the dataset
+  if ("model4" %in% names(glm_results[[data_name]])) {
+    model <- glm_results[[data_name]][["model4"]]
+    
+   
+        # Extract participant-specific betas
+    subject_effects <- ranef(model)$subject
+    fixed_effects <- fixef(model)
+    
+ # Calculate coefficients for UpFixation and DownFixation for each subject
+    participant_betas <- data.frame(
+      subject = rownames(subject_effects),
+            beta_UpVD= fixed_effects["z_up_vd"] + subject_effects[, 1],  
+      beta_DownVD= fixed_effects["z_down_vd"] + subject_effects[, 1],  
+      beta_UpFixation = fixed_effects["z_up_fixpropdiff"] + subject_effects[, 1],  
+      beta_DownFixation = fixed_effects["z_down_fixpropdiff"] + subject_effects[, 1] 
+    )
+    
+    # Append the participant_betas data frame to the summary list using the dataset name as the key
+    coef_individual_summary[[data_name]] <- participant_betas
+    
+    any(is.na(participant_betas$beta_UpFixation))
+any(is.na(participant_betas$beta_DownFixation))
+
+if (length(unique(participant_betas$beta_UpFixation)) == 1 ||
+    length(unique(participant_betas$beta_DownFixation)) == 1) {
+    message("Data is constant. Mean for UpFixation: ", mean(participant_betas$beta_UpFixation),
+            ", Mean for DownFixation: ", mean(participant_betas$beta_DownFixation))
+}
+
+
+if (sd(participant_betas$beta_UpFixation) < 1e-10 ||
+    sd(participant_betas$beta_DownFixation) < 1e-10) {
+    message("Data has insufficient variability for t-test.")
+}
+
+    paired_ttest[[data_name]] <- t.test(participant_betas$beta_UpFixation, participant_betas$beta_DownFixation)
+     #  mu = 0, 
+      # paired = TRUE,   
+       #var.equal = TRUE,
+       #conf.level = 0.95)
+
+nonParam_test[[data_name]] <- wilcox.test(participant_betas$beta_UpFixation, participant_betas$beta_DownFixation)
+
+  VDweight = participant_betas$beta_UpVD/participant_betas$beta_DownVD
+  Gazeweight = participant_betas$beta_UpFixation/participant_betas$beta_DownFixation
+
+corr_test[[data_name]] <- cor.test(VDweight, Gazeweight, method = "pearson")
+  }
+}
+
+```
