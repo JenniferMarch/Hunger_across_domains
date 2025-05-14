@@ -1,11 +1,13 @@
 *.Rproj.user
 *.Rhistory
-*.RData
 *.Ruserdata
 *.csv
 *.Rproj
 *data/
 *.DS_Store
-*Modeling/
+*.pdf
+*.ppt
+*.pptx
 .DS_Store
 .Rproj.user
+
