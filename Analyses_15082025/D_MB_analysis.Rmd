@@ -1,0 +1,1012 @@
+---
+title: "Model fitting"
+output: html_document
+date: "2024-10-23"
+---
+### Information
+The script used the data from Jenna (food, social, temporal discounting) and Yang et al., 2022 (clothing). Since the script relies on the data organized by other scripts (e.g., Behaviour/A_Preprocess.Rmd and Behaviour/B_organizedata.Rmd), WE HAVE TO RERUN THIS SCRIPT if any change in those files is made. 
+
+** RERUN THIS SCRIPT if any change in Behaviour/A_Preprocess.Rmd or in Behaviour/B_organizedata.Rmd is made. 
+
+### Inputs and Variables
+```{r}
+# Inputs: 
+# ../data/datasets.RData
+
+# Outputs:
+# 
+```
+
+# 1 Preparations
+## 1.1 Load Libraries
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+# JAGS related package from: https://sourceforge.net/p/jags-wiener/code/ci/master/tree/
+#load required libraries
+LibraryList <- c("readxl", "rstatix", "readr", 
+                 "tidyr","dplyr","zoo", "ggplot2", "tibble",
+                 "ez","lme4", "lmerTest",
+                 "parallel","doParallel","foreach",
+                 "rtdists","R2jags") # JAGS package
+invisible(lapply(LibraryList, library, character.only = TRUE))
+
+numCores <- detectCores()
+registerDoParallel(cores=numCores)
+
+```
+
+create theme for plotting
+```{r}
+library(ggplot2)
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+```{r}
+load("CLOTH_fitting.RData")
+load("J_FOOD_fitting.RData")
+load("J_SOCIAL_fitting.RData")
+load("J_DISCOUNT_fitting.RData")
+#load("envy_fitting.RData")
+load("compassion_fitting.RData")
+```
+
+
+## 1.2 Models
+```{r}
+# model fitting information
+parametersList <- list()
+modelName <- c("maaDDM","maaDDM2phi") #maaDDM1phi and maaDDM2phi
+dataName <- c("data_clothing", "org_data_food_sated", "org_data_social_sated", "org_data_discount_sated", "data_compassion") # "data_clothing","org_data_food_sated","org_data_social_sated","org_data_discount_sated", 
+
+# parametersList[[modelName[1]]] <- c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+#                         'mu_drift','sigma_drift','mu_weight1','sigma_weight1', 
+#                         'mu_theta','sigma_theta',
+#                         'bound','ndt','drift','weight1','theta')
+parametersList[[modelName[1]]] <-c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                          'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                          'mu_theta','sigma_theta','mu_phy','sigma_phy',
+                          'bound','ndt','drift','weight1','theta','phy')
+parametersList[[modelName[2]]] <-c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                              'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                              'mu_theta','sigma_theta','mu_phy','sigma_phy', 'mu_phy2','sigma_phy2', 
+                              'bound','ndt','drift','weight1','theta','phy', 'phy2')
+
+# file names for model fitting
+
+
+# JAGS parameters
+fit <- list(
+  nData = length(dataName),
+  nModel = length(modelName),
+  modelfile = c("BayesModel_maaDDM.txt", "BayesModel_maaDDM_2Phi.txt"),
+  model_name = modelName,
+  data_name = dataName,
+  data_file = 'data/datasets.RData',
+  save_file = c("CLOTH_fitting.RData","J_FOOD_fitting.RData","J_SOCIAL_fitting.RData","J_DISCOUNT_fitting.RData", "compassion_fitting.RData")) 
+```
+
+
+# 2 Main loop for fitting
+## 2.1 Estimate DDMs with hierarchical Bayesian modeling (JAGS)
+```{r}
+load(fit$data_file)
+
+for (D in 1:fit$nData) {
+  fittingResults <- list()
+  MB_summary.maxR <- matrix(NA,1,fit$nModel)
+  MB_summary.DIC <- matrix(NA,1,fit$nModel)
+  
+  for (fm in 1:fit$nModel) {
+    # the current state:
+    print(paste0("current data is", fit$data_name[D], ". Model:", fit$model_name[fm]))
+    
+    # get data and initial values together and specify the model
+    data <- get(fit$data_name[D])
+    
+    # only include valid trials
+    validT <- which((is.na(data$fixProp1)==0)|(is.na(data$fixProp2)==0)|(is.na(data$fixProp3)==0)|(is.na(data$fixProp4)==0))
+    data <- data[validT, ]
+    N <- length(data$RT)
+    S <- length(unique(data$subject))
+    
+    ddmData <- list('N'=N,'S'=S,'P'=data$P_subj,
+                    'attribute1A'=data$scl_upleft_val, #XA
+                    'attribute1B'=data$scl_upright_val, #YA
+                    'attribute2A'=data$scl_downleft_val, #XB
+                    'attribute2B'=data$scl_downright_val, #YB
+                    'RT'=data$RT_right/1000,
+                    'fixProp1'=data$fixProp1,'fixProp2'=data$fixProp2,'fixProp3'=data$fixProp3,'fixProp4'=data$fixProp4)
+    
+    T1<-Sys.time() # check how much time is needed to finish model fitting
+    parameters <- parametersList[[fit$model_name[fm]]]
+    model_file <- fit$modelfile[fm]
+    maaDDMresults <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+                                   parameters.to.save = parameters,
+                                   model.file = model_file, working.directory = 'BayesModels_noHungry',
+                                   n.chains = 5, n.iter = 80000, n.burnin = 10000 ,n.thin = 6, DIC = TRUE,jags.module = c("glm","dic","wiener"))
+    T2<-Sys.time() #T2-T1
+    
+    # check convergence and fit
+    ddmRhats <- maaDDMresults$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+    MB_summary.maxR[fm] <- max(ddmRhats)
+    MB_summary.DIC[fm] <- maaDDMresults$BUGSoutput$DIC
+    
+    # store results
+    fittingResults[[fit$model_name[fm]]] <- maaDDMresults
+  }
+  
+  # save results
+  save(fit,fittingResults,MB_summary.maxR,MB_summary.DIC, file=fit$save_file[D])
+}
+```
+
+## 2.2 Summary of model fitting
+The following information is stored in "results" variable
+- model comparison (rhat; DIC)
+- Estimate parameters (subject-level; group-level; prosterior distribution)
+```{r}
+#JM: I had to make some adjustments, as we no longer fit aDDM and have more datafiles
+parameter_subj<- list()
+parameter_group<- list()
+parameter_posterior <- list()
+diagnostics <- list()
+results  <- list()
+
+for (D in 1:6) {
+  fit$save_file <-  c("CLOTH_fitting.RData","J_FOOD_fitting.RData","J_SOCIAL_fitting.RData","J_DISCOUNT_fitting.RData", "compassion_fitting.RData") 
+  
+  load(fit$save_file[D])
+  fit$nData <- 6
+  
+  for (fm in 1:fit$nModel) {
+    maaDDM <- fittingResults[[fit$model_name[fm]]]
+    
+    parameter_subj[[dataName[D]]][[fit$model_name[fm]]]<- data.frame(
+      boundSep_subj= log(1+exp(maaDDM$BUGSoutput$mean$bound)),
+      ndt_subj = log(1+exp(maaDDM$BUGSoutput$mean$ndt)),
+      weight1_subj = pnorm(maaDDM$BUGSoutput$mean$weight1),
+      drift_subj = log(1+exp(maaDDM$BUGSoutput$mean$drift)),
+      theta_subj = (maaDDM$BUGSoutput$mean$theta),
+      phy_subj = (maaDDM$BUGSoutput$mean$phy)
+    ) 
+    
+    parameter_group[[dataName[D]]][[fit$model_name[fm]]]<- data.frame(
+      boundSep= log(1+exp(maaDDM$BUGSoutput$mean$mu_bound)),
+      ndt = log(1+exp(maaDDM$BUGSoutput$mean$mu_ndt)),
+      weight1 = pnorm(maaDDM$BUGSoutput$mean$mu_weight1),
+      drift = log(1+exp(maaDDM$BUGSoutput$mean$mu_drift)),
+      theta = (maaDDM$BUGSoutput$mean$mu_theta),
+      phy = (maaDDM$BUGSoutput$mean$mu_phy)
+    ) 
+    
+    parameter_posterior[[dataName[D]]][[fit$model_name[fm]]]<- data.frame(
+      boundSep= log(1+exp(maaDDM$BUGSoutput$sims.list$mu_bound)),
+      ndt = log(1+exp(maaDDM$BUGSoutput$sims.list$mu_ndt)),
+      weight1 = pnorm(maaDDM$BUGSoutput$sims.list$mu_weight1),
+      drift = log(1+exp(maaDDM$BUGSoutput$sims.list$mu_drift)),
+      theta = (maaDDM$BUGSoutput$sims.list$mu_theta),
+      phy = (maaDDM$BUGSoutput$sims.list$mu_phy)
+    ) 
+    
+    diagnostics[[dataName[D]]][[fit$model_name[fm]]]<- data.frame(
+      DIC= (maaDDM$BUGSoutput$DIC),
+      Rhat = max(maaDDM$BUGSoutput$summary[,8]))
+    
+    if (fm == 2){
+      parameter_subj[[dataName[D]]][[fit$model_name[fm]]]$phy_subj<- (maaDDM$BUGSoutput$mean$phy)
+      parameter_subj[[dataName[D]]][[fit$model_name[fm]]]$phy2_subj<- (maaDDM$BUGSoutput$mean$phy2)
+      
+      parameter_group[[dataName[D]]][[fit$model_name[fm]]]$phy<-  (maaDDM$BUGSoutput$mean$mu_phy)
+      parameter_group[[dataName[D]]][[fit$model_name[fm]]]$phy2<-  (maaDDM$BUGSoutput$mean$mu_phy2)
+      
+      parameter_posterior[[dataName[D]]][[fit$model_name[fm]]]$phy<- (maaDDM$BUGSoutput$sims.list$mu_phy)
+      parameter_posterior[[dataName[D]]][[fit$model_name[fm]]]$phy2<- (maaDDM$BUGSoutput$sims.list$mu_phy2)
+      
+      diagnostics[[dataName[D]]][[fit$model_name[fm]]]<- data.frame(
+      DIC= (maaDDM$BUGSoutput$DIC),
+      Rhat = max(maaDDM$BUGSoutput$summary[,8]))
+      
+      phy_delta <- maaDDM$BUGSoutput$sims.list$mu_phy-maaDDM$BUGSoutput$sims.list$mu_phy2
+      parameter_posterior[[dataName[D]]][[fit$model_name[fm]]] <- data.frame(phy_delta = phy_delta)
+      results[[dataName[D]]] <- data.frame(
+        HDI_phiAphiB = quantile(phy_delta,c(.025,.975)),
+        rhat = MB_summary.maxR,
+        DIC = MB_summary.DIC)
+    }
+  }
+}
+
+
+
+```
+
+## Diagnostics
+```{r}
+# Extract DIC values from your list structure
+dataset_names <- names(diagnostics)
+model_names <- c("maaDDM", "maaDDM2phi")
+
+# Create empty dataframe
+rhat_data <- data.frame()
+
+# Loop through datasets and models to extract DIC values
+for(dataset in dataset_names) {
+  for(model in model_names) {
+    if(model %in% names(diagnostics[[dataset]])) {
+      rhat_value <- diagnostics[[dataset]][[model]]$Rhat
+      rhat_data <- rbind(rhat_data, 
+                        data.frame(dataset = dataset,
+                                 model = model,
+                                 DIC = rhat_value))
+    }
+  }
+}
+rhat_data
+# rhat of discount problematic for both models, rhat of envy problematic for maaDDM
+
+# Create empty dataframe
+dic_data <- data.frame()
+
+# Loop through datasets and models to extract DIC values
+for(dataset in dataset_names) {
+  for(model in model_names) {
+    if(model %in% names(diagnostics[[dataset]])) {
+      dic_value <- diagnostics[[dataset]][[model]]$DIC
+      dic_data <- rbind(dic_data, 
+                        data.frame(dataset = dataset,
+                                 model = model,
+                                 DIC = dic_value))
+    }
+  }
+}
+
+# Calculate difference scores (maaDDM - maaDDM2phi)
+dic_differences <- dic_data %>%
+  pivot_wider(names_from = model, values_from = DIC) %>%
+  mutate(
+    difference = maaDDM - maaDDM2phi,
+    better_model = ifelse(difference > 0, "maaDDM2phi", "maaDDM"),
+    dataset_clean = case_when(
+      dataset == "data_clothing" ~ "Clothing",
+      dataset == "org_data_food_sated" ~ "Food",
+      dataset == "org_data_social_sated" ~ "Social",
+      dataset == "org_data_discount_sated" ~ "Discount",
+      dataset == "data_compassion" ~ "Compassion",
+      dataset == "data_envy" ~ "Envy",
+      TRUE ~ dataset
+    )
+  ) %>%
+  # Order datasets by difference for better visualization
+  arrange(difference)
+
+
+# Alternative horizontal version for easier reading
+p_horizontal <- ggplot(dic_differences, aes(x = difference, y = reorder(dataset_clean, difference))) +
+  geom_col(aes(fill = better_model), alpha = 0.8, width = 0.7) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 0.8) +
+  scale_fill_manual(
+    values = c("maaDDM" = "#E31A1C", "maaDDM2phi" = "#1F78B4"),
+    name = "Better Model"
+  ) +
+  xlim(-10, 1770)+
+  myTheme +
+  labs(
+    title = "",
+    y = "Dataset",
+    x = "DIC(maaDDM) - DIC(maaDDM2phi)",
+  ) +
+  geom_text(aes(label = round(difference, 1)), 
+            hjust = ifelse(dic_differences$difference >= 0, -0.1, 1.1),
+            size = 3.5, fontface = "bold")
+
+print(p_horizontal)
+
+
+```
+
+
+```{r}
+# Load required libraries
+library(coda)
+library(gridExtra)
+
+# Function to check convergence focusing on group-level parameters
+check_convergence <- function(fitting_file, model_names = c("maaDDM", "maaDDM2phi"), max_plots = 5) {
+  
+  # Load the fitting results
+  load(fitting_file)
+  
+  cat("=== Convergence Summary ===\n")
+  cat("Dataset:", fitting_file, "\n")
+  cat("Max Rhat values:\n")
+  for(i in 1:length(model_names)) {
+    if(i <= length(MB_summary.maxR)) {
+      cat(model_names[i], ":", MB_summary.maxR[i], "\n")
+    }
+  }
+  cat("DIC values:\n")
+  for(i in 1:length(model_names)) {
+    if(i <= length(MB_summary.DIC)) {
+      cat(model_names[i], ":", MB_summary.DIC[i], "\n")
+    }
+  }
+  cat("\n")
+  
+  # Check each model
+  for(model_name in model_names) {
+    if(model_name %in% names(fittingResults)) {
+      cat("=== Analyzing", model_name, "===\n")
+      
+      # Get JAGS results
+      jags_result <- fittingResults[[model_name]]
+      
+      # Get Rhat values for all parameters
+      rhats <- jags_result$BUGSoutput$summary[, "Rhat"]
+      
+      # Define group-level parameters (population means and SDs)
+      group_level_patterns <- c("^mu_", "^sigma_")
+      
+      # Filter for group-level parameters only
+      param_names <- names(rhats)
+      group_params <- param_names[grepl(paste(group_level_patterns, collapse = "|"), param_names)]
+      
+      # Get problematic group-level parameters
+      problematic_group_params <- group_params[rhats[group_params] > 1.05]
+      
+      # Get all problematic parameters for counting
+      all_problematic <- names(rhats)[rhats > 1.05]
+      
+      cat("Total problematic parameters (Rhat > 1.05):", length(all_problematic), "\n")
+      cat("Group-level problematic parameters:", length(problematic_group_params), "\n")
+      
+      if(length(problematic_group_params) > 0) {
+        cat("\nGroup-level parameters with Rhat > 1.05:\n")
+        for(param in problematic_group_params) {
+          cat(sprintf("  %s: Rhat = %.4f\n", param, rhats[param]))
+        }
+        
+        # Limit the number of traceplots
+        params_to_plot <- problematic_group_params[1:min(length(problematic_group_params), max_plots)]
+        if(length(problematic_group_params) > max_plots) {
+          cat(sprintf("\nShowing traceplots for top %d problematic group-level parameters (out of %d)\n", 
+                     max_plots, length(problematic_group_params)))
+        }
+        
+        # Create traceplots for selected problematic group parameters
+        create_traceplots(jags_result, params_to_plot, model_name)
+        
+      } else {
+        cat("All group-level parameters have acceptable Rhat values (< 1.05)\n")
+        
+        # Check if individual-level parameters are the issue
+        individual_problematic <- setdiff(all_problematic, group_params)
+        if(length(individual_problematic) > 0) {
+          cat("However, there are", length(individual_problematic), "problematic individual-level parameters\n")
+          cat("Consider: longer burn-in, more iterations, or model reparameterization\n")
+        }
+      }
+      
+      # Show summary statistics for key group-level parameters
+      cat("\nSummary for key group-level parameters:\n")
+      key_params <- c("mu_bound", "sigma_bound", "mu_drift", "sigma_drift", 
+                     "mu_theta", "sigma_theta", "mu_phy", "sigma_phy")
+      if(model_name == "maaDDM2phi") {
+        key_params <- c(key_params, "mu_phy2", "sigma_phy2")
+      }
+      
+      for(param in key_params) {
+        if(param %in% rownames(jags_result$BUGSoutput$summary)) {
+          summary_row <- jags_result$BUGSoutput$summary[param, ]
+          rhat_status <- ifelse(summary_row["Rhat"] > 1.05, "*** PROBLEMATIC ***", "OK")
+          cat(sprintf("  %s: mean=%.4f, sd=%.4f, Rhat=%.4f (%s), n.eff=%.0f\n", 
+                     param, summary_row["mean"], summary_row["sd"], 
+                     summary_row["Rhat"], rhat_status, summary_row["n.eff"]))
+        }
+      }
+      cat("\n")
+    }
+  }
+}
+
+# Function to create traceplots with automatic saving option
+create_traceplots <- function(jags_result, param_names, model_name, auto_save = FALSE) {
+  
+  # Convert to mcmc object for easier plotting
+  mcmc_samples <- as.mcmc(jags_result)
+  
+  for(i in seq_along(param_names)) {
+    param <- param_names[i]
+    if(param %in% colnames(mcmc_samples[[1]])) {
+      
+      # Extract chains for this parameter
+      chains_data <- data.frame(
+        iteration = rep(1:nrow(mcmc_samples[[1]]), length(mcmc_samples)),
+        value = c(sapply(mcmc_samples, function(x) x[, param])),
+        chain = rep(1:length(mcmc_samples), each = nrow(mcmc_samples[[1]]))
+      )
+      
+      # Create traceplot
+      p1 <- ggplot(chains_data, aes(x = iteration, y = value, color = factor(chain))) +
+        geom_line(alpha = 0.7) +
+        labs(title = paste("Traceplot:", param, "(" , model_name, ")"),
+             x = "Iteration", y = "Value", color = "Chain") +
+        theme_minimal() +
+        theme(legend.position = "bottom")
+      
+      # Create density plot
+      p2 <- ggplot(chains_data, aes(x = value, fill = factor(chain))) +
+        geom_density(alpha = 0.5) +
+        labs(title = paste("Density:", param),
+             x = "Value", y = "Density", fill = "Chain") +
+        theme_minimal() +
+        theme(legend.position = "bottom")
+      
+      # Print plots
+      combined_plot <- grid.arrange(p1, p2, ncol = 1)
+      
+      if(auto_save) {
+        # Save plot automatically
+        ggsave(filename = paste0("traceplot_", model_name, "_", gsub("[^A-Za-z0-9]", "_", param), ".png"),
+               plot = combined_plot, width = 10, height = 8, dpi = 300)
+        cat(sprintf("Plot saved for parameter %s (%d/%d)\n", param, i, length(param_names)))
+      } else {
+        # Interactive mode
+        cat(sprintf("Parameter %s (%d/%d) - Press [Enter] to continue or 's' to save all remaining plots automatically: ", 
+                   param, i, length(param_names)))
+        user_input <- readline()
+        if(tolower(user_input) == 's') {
+          auto_save <- TRUE
+          ggsave(filename = paste0("traceplot_", model_name, "_", gsub("[^A-Za-z0-9]", "_", param), ".png"),
+                 plot = combined_plot, width = 10, height = 8, dpi = 300)
+          cat("Switching to auto-save mode...\n")
+        }
+      }
+    }
+  }
+}
+
+# Function to run extended diagnostics
+extended_diagnostics <- function(fitting_file, model_name) {
+  
+  load(fitting_file)
+  
+  if(model_name %in% names(fittingResults)) {
+    jags_result <- fittingResults[[model_name]]
+    
+    # Convert to mcmc object
+    mcmc_samples <- as.mcmc(jags_result)
+    
+    cat("=== Extended Diagnostics for", model_name, "===\n")
+    
+    # Gelman-Rubin diagnostic
+    cat("Gelman-Rubin diagnostics:\n")
+    gr_diag <- gelman.diag(mcmc_samples, multivariate = FALSE)
+    problematic_gr <- gr_diag$psrf[gr_diag$psrf[, "Point est."] > 1.05, ]
+    if(nrow(problematic_gr) > 0) {
+      print(problematic_gr)
+    } else {
+      cat("All parameters pass Gelman-Rubin diagnostic\n")
+    }
+    
+    # Effective sample size
+    cat("\nEffective sample sizes:\n")
+    eff_sizes <- effectiveSize(mcmc_samples)
+    low_eff <- eff_sizes[eff_sizes < 1000]
+    if(length(low_eff) > 0) {
+      cat("Parameters with effective sample size < 1000:\n")
+      print(low_eff)
+    } else {
+      cat("All parameters have adequate effective sample sizes\n")
+    }
+    
+    # Autocorrelation
+    cat("\nAutocorrelation at lag 10:\n")
+    autocorr_10 <- autocorr.diag(mcmc_samples, lags = 10)
+    high_autocorr <- autocorr_10[abs(autocorr_10) > 0.1]
+    if(length(high_autocorr) > 0) {
+      print(high_autocorr)
+    } else {
+      cat("Low autocorrelation for all parameters\n")
+    }
+  }
+}
+
+# Quick function to get only group-level convergence summary
+quick_group_convergence <- function(fitting_file, model_names = c("maaDDM", "maaDDM2phi")) {
+  
+  load(fitting_file)
+  
+  cat("=== Quick Group-Level Convergence Check ===\n")
+  cat("Dataset:", basename(fitting_file), "\n\n")
+  
+  for(model_name in model_names) {
+    if(model_name %in% names(fittingResults)) {
+      
+      jags_result <- fittingResults[[model_name]]
+      rhats <- jags_result$BUGSoutput$summary[, "Rhat"]
+      
+      # Group-level parameters only
+      group_level_patterns <- c("^mu_", "^sigma_")
+      param_names <- names(rhats)
+      group_params <- param_names[grepl(paste(group_level_patterns, collapse = "|"), param_names)]
+      
+      group_rhats <- rhats[group_params]
+      problematic_group <- group_rhats[group_rhats > 1.05]
+      
+      cat("Model:", model_name, "\n")
+      cat("  Max group-level Rhat:", round(max(group_rhats, na.rm = TRUE), 4), "\n")
+      cat("  Problematic group parameters:", length(problematic_group), "out of", length(group_rhats), "\n")
+      
+      if(length(problematic_group) > 0) {
+        cat("  Worst parameters:\n")
+        sorted_problems <- sort(problematic_group, decreasing = TRUE)
+        for(i in 1:min(3, length(sorted_problems))) {
+          cat(sprintf("    %s: %.4f\n", names(sorted_problems)[i], sorted_problems[i]))
+        }
+      }
+      cat("\n")
+    }
+  }
+}
+
+# Run quick check on all datasets
+cat("=== QUICK OVERVIEW OF ALL DATASETS ===\n")
+datasets <- c("CLOTH_fitting.RData", "J_FOOD_fitting.RData", "J_SOCIAL_fitting.RData", 
+              "J_DISCOUNT_fitting.RData", "compassion_fitting.RData"
+              )
+
+for(dataset in datasets) {
+  if(file.exists(dataset)) {
+    quick_group_convergence(dataset)
+  }
+}
+
+check_convergence("J_DISCOUNT_fitting.RData", max_plots = 10)
+```
+
+
+
+
+## 2.3 Visualization
+
+```{r}
+# load("CLOTH_fitting.RData")
+# load("J_FOOD_fitting.RData")
+# load("J_SOCIAL_fitting.RData")
+# load("J_DISCOUNT_fitting.RData")
+
+# 
+
+```
+
+```{r}
+# extract_param_differences <- function(data_list, param_name = "weight1_subj") {
+# 
+#   # Initialize empty data frame to store results
+#   results_df <- data.frame(
+#     dataset = character(),
+#     parameter = character(),
+#     difference = numeric(),
+#     stringsAsFactors = FALSE
+#   )
+# 
+#   # Loop through each dataset in your list
+#   for(i in 1:length(data_list)) {
+#     dataset_name <- names(data_list)[i]
+# 
+#     # Check if this dataset contains the required elements
+#     if("maaDDM" %in% names(data_list[[i]]) && "maaDDM2phi" %in% names(data_list[[i]])) {
+# 
+#       # Extract parameter values from both models
+#       maaDDM_param <- data_list[[i]]$maaDDM[[param_name]]
+#       maaDDM2phi_param <- data_list[[i]]$maaDDM2phi[[param_name]]
+# 
+#       # Calculate difference (2phi - original)
+#       param_diff <- maaDDM2phi_param[[phy_subj]] - maaDDM2phi_param[[phy2_subj]]
+# 
+#       # Store results
+#       temp_df <- data.frame(
+#         dataset = rep(dataset_name, length(param_diff)),
+#         parameter = param_name,
+#         difference = param_diff,
+#         stringsAsFactors = FALSE
+#       )
+# 
+#       results_df <- rbind(results_df, temp_df)
+#     }
+#   }
+# 
+#   return(results_df)
+# }
+# 
+# parameter_subj$maaDDM2phi_param[[phy_subj]]
+# 
+# create_multi_parameter_plot <- function(data_list, param_names = c("weight1_subj", "phy_subj")) {
+#   
+#   # Extract data for all parameters
+#   all_data <- data.frame()
+#   
+#   for(param in param_names) {
+#     param_data <- extract_param_differences(data_list, param)
+#     all_data <- rbind(all_data, param_data)
+#   }
+#   
+#   # Calculate summary statistics
+#   summary_data <- all_data %>%
+#     group_by(dataset, parameter) %>%
+#     summarise(
+#       mean_diff = mean(difference, na.rm = TRUE),
+#       se_diff = sd(difference, na.rm = TRUE) / sqrt(n()),
+#       ci_lower = mean_diff - 1.96 * se_diff,
+#       ci_upper = mean_diff + 1.96 * se_diff,
+#       .groups = 'drop'
+#     )
+#   
+#   # Create the plot
+#   p <- ggplot(summary_data, aes(x = mean_diff, y = dataset, color = parameter)) +
+#     geom_vline(xintercept = 0, linetype = "solid", color = "black", size = 1) +
+#     geom_errorbarh(aes(xmin = ci_lower, xmax = ci_upper), 
+#                    height = 0.15, size = 1, alpha = 0.7) +
+#     geom_point(size = 3, alpha = 0.8) +
+#     labs(
+#       title = "Parameter Differences: 2phi vs Original Model",
+#       x = "Parameter Difference",
+#       y = "Dataset",
+#       color = "Parameter"
+#     ) +
+#     myTheme +
+#     theme(
+#       axis.text = element_text(size = 12),
+#       axis.title = element_text(size = 14, face = "bold"),
+#       plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+#       legend.title = element_text(size = 12, face = "bold"),
+#       panel.grid.major.y = element_line(color = "grey90"),
+#       panel.grid.minor = element_blank(),
+#       panel.grid.major.x = element_line(color = "grey95")
+#     ) +
+#     scale_color_brewer(type = "qual", palette = "Set2")
+#   
+#   return(p)
+# }
+
+
+
+```
+
+extract functions
+```{r}
+# Function to extract weight parameters from both models
+extract_weight_data <- function(data_list, param_name = "weight1_subj") {
+  
+  results_df <- data.frame(
+    dataset = character(),
+    model = character(),
+    value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each dataset in your list
+  for(i in 1:length(data_list)) {
+    dataset_name <- names(data_list)[i]
+    
+    # Extract maaDDM weight parameter
+    if("maaDDM" %in% names(data_list[[i]]) && param_name %in% names(data_list[[i]]$maaDDM)) {
+      maaDDM_values <- data_list[[i]]$maaDDM[[param_name]]
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(maaDDM_values)),
+        model = rep("maaDDM", length(maaDDM_values)),
+        value = maaDDM_values,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+    
+    # Extract maaDDM2phi weight parameter
+    if("maaDDM2phi" %in% names(data_list[[i]]) && param_name %in% names(data_list[[i]]$maaDDM2phi)) {
+      maaDDM2phi_values <- data_list[[i]]$maaDDM2phi[[param_name]]
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(maaDDM2phi_values)),
+        model = rep("maaDDM2phi", length(maaDDM2phi_values)),
+        value = maaDDM2phi_values,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+  }
+  
+  return(results_df)
+}
+
+# Function to extract phy parameters (phy_subj for maaDDM, phy_subj - phy2_subj for maaDDM2phi)
+extract_phy_data <- function(data_list) {
+  
+  results_df <- data.frame(
+    dataset = character(),
+    model = character(),
+    value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each dataset in your list
+  for(i in 1:length(data_list)) {
+    dataset_name <- names(data_list)[i]
+    
+    # Extract maaDDM phy_subj parameter
+    if("maaDDM" %in% names(data_list[[i]]) && "phy_subj" %in% names(data_list[[i]]$maaDDM)) {
+      phy_values <- data_list[[i]]$maaDDM[["phy_subj"]]
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(phy_values)),
+        model = rep("maaDDM", length(phy_values)),
+        value = phy_values,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+    
+    # Extract maaDDM2phi phy difference (phy_subj - phy2_subj)
+    if("maaDDM2phi" %in% names(data_list[[i]]) && 
+       "phy_subj" %in% names(data_list[[i]]$maaDDM2phi) &&
+       "phy2_subj" %in% names(data_list[[i]]$maaDDM2phi)) {
+      
+      phy_values <- data_list[[i]]$maaDDM2phi[["phy_subj"]]
+      phy2_values <- data_list[[i]]$maaDDM2phi[["phy2_subj"]]
+      phy_diff <- phy_values - phy2_values
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(phy_diff)),
+        model = rep("maaDDM2phi", length(phy_diff)),
+        value = phy_diff,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+  }
+  
+  return(results_df)
+}
+
+
+# Function to extract all phy parameters for comprehensive comparison
+extract_all_phy_data <- function(data_list) {
+  
+  results_df <- data.frame(
+    dataset = character(),
+    parameter = character(),
+    value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each dataset in your list
+  for(i in 1:length(data_list)) {
+    dataset_name <- names(data_list)[i]
+    
+    # Extract maaDDM phy_subj parameter
+    if("maaDDM" %in% names(data_list[[i]]) && "phy_subj" %in% names(data_list[[i]]$maaDDM)) {
+      phy_values <- data_list[[i]]$maaDDM[["phy_subj"]]
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(phy_values)),
+        parameter = rep("maaDDM: phy", length(phy_values)),
+        value = phy_values,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+    
+    # Extract maaDDM2phi phy_subj parameter
+    if("maaDDM2phi" %in% names(data_list[[i]]) && "phy_subj" %in% names(data_list[[i]]$maaDDM2phi)) {
+      phy_values <- data_list[[i]]$maaDDM2phi[["phy_subj"]]
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(phy_values)),
+        parameter = rep("maaDDM2phi: phy", length(phy_values)),
+        value = phy_values,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+    
+    # Extract maaDDM2phi phy2_subj parameter
+    if("maaDDM2phi" %in% names(data_list[[i]]) && "phy2_subj" %in% names(data_list[[i]]$maaDDM2phi)) {
+      phy2_values <- data_list[[i]]$maaDDM2phi[["phy2_subj"]]
+      
+      temp_df <- data.frame(
+        dataset = rep(dataset_name, length(phy2_values)),
+        parameter = rep("maaDDM2phi: phy2", length(phy2_values)),
+        value = phy2_values,
+        stringsAsFactors = FALSE
+      )
+      results_df <- rbind(results_df, temp_df)
+    }
+  }
+  
+  return(results_df)
+}
+
+
+
+```
+
+plot functions
+```{r}
+# Function to create weight parameter comparison plot
+create_weight_plot <- function(data_list, param_name = "weight1_subj") {
+  
+  # Extract the data
+  plot_data <- extract_weight_data(data_list, param_name)
+  
+  # Calculate summary statistics for each dataset and model
+  summary_data <- plot_data %>%
+    group_by(dataset, model) %>%
+    summarise(
+      mean_value = mean(value, na.rm = TRUE),
+      se_value = sd(value, na.rm = TRUE) / sqrt(n()),
+      ci_lower = mean_value - 1.96 * se_value,
+      ci_upper = mean_value + 1.96 * se_value,
+      .groups = 'drop'
+    )
+  
+  # Create the plot
+  p <- ggplot(summary_data, aes(x = mean_value, y = dataset, color = model)) +
+    geom_vline(xintercept = 0.5, linetype = "dashed", color = "black", size = 0.5, alpha = 0.7) +
+    geom_errorbarh(aes(xmin = ci_lower, xmax = ci_upper), 
+                   height = 0.2, size = 1.2, alpha = 0.8, position = position_dodge(width = 0.4)) +
+    geom_point(size = 4, alpha = 0.9,position = position_dodge(width = 0.4)) +
+    labs(
+      title ="Weight Parameter Comparison:",
+      x = "Relative Weight",
+      y = "Dataset",
+      color = "Model"
+    ) +
+    scale_y_discrete(labels = function(x) {
+      x <- gsub("org_data_", "", x)
+      x <- gsub("data_", "", x)
+      x <- gsub("_sated", "", x)
+      x <- gsub("parameter_subj", "Parameter", x)
+      tools::toTitleCase(x)
+    }) +
+    myTheme +
+    scale_color_manual(values = c("maaDDM" = "#E31A1C", "maaDDM2phi" = "#1F78B4"))
+  
+  return(p)
+}
+
+# Function to create phy parameter comparison plot
+create_phy_plot <- function(data_list) {
+  
+  # Extract the data
+  plot_data <- extract_phy_data(data_list)
+  
+  # Calculate summary statistics for each dataset and model
+  summary_data <- plot_data %>%
+    group_by(dataset, model) %>%
+    summarise(
+      mean_value = mean(value, na.rm = TRUE),
+      se_value = sd(value, na.rm = TRUE) / sqrt(n()),
+      ci_lower = mean_value - 1.96 * se_value,
+      ci_upper = mean_value + 1.96 * se_value,
+      .groups = 'drop'
+    )
+  
+  # Create the plot
+  p <- ggplot(summary_data, aes(x = mean_value, y = dataset, color = model)) +
+    geom_vline(xintercept = 0.5, linetype = "dashed", color = "#E31A1C", size = 0.5, alpha = 0.7) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#1F78B4", size = 0.5, alpha = 0.7) +
+    geom_errorbarh(aes(xmin = ci_lower, xmax = ci_upper), 
+                   height = 0.2, size = 1.2, alpha = 0.8, position = position_dodge(width = 0.4)) +
+    geom_point(size = 4, alpha = 0.9,position = position_dodge(width = 0.4)) +
+    labs(
+      title = "Phy Parameter Comparison",
+      x = "Phi / Phi1-Phi2",
+      y = "Dataset",
+      color = "Model"
+    ) +
+    scale_y_discrete(labels = function(x) {
+      x <- gsub("org_data_", "", x)
+      x <- gsub("data_", "", x)
+      x <- gsub("_sated", "", x)
+      x <- gsub("parameter_subj", "Parameter", x)
+      tools::toTitleCase(x)
+    }) +
+    myTheme +
+    scale_color_manual(values = c("maaDDM" = "#E31A1C", "maaDDM2phi" = "#1F78B4"))
+  
+  return(p)
+}
+
+# Function to create comprehensive phy parameter comparison plot
+create_phy_plot2 <- function(data_list) {
+  
+  # Extract the data
+  plot_data <- extract_all_phy_data(data_list)
+  
+  # Calculate summary statistics for each dataset and parameter
+  summary_data <- plot_data %>%
+    group_by(dataset, parameter) %>%
+    summarise(
+      mean_value = mean(value, na.rm = TRUE),
+      se_value = sd(value, na.rm = TRUE) / sqrt(n()),
+      ci_lower = mean_value - 1.96 * se_value,
+      ci_upper = mean_value + 1.96 * se_value,
+      .groups = 'drop'
+    )
+  
+  # Create the plot
+  p <- ggplot(summary_data, aes(x = mean_value, y = dataset, color = parameter)) +
+    geom_vline(xintercept = 0.5, linetype = "dashed", color = "black", size = 0.5, alpha = 0.7) +
+    geom_errorbarh(aes(xmin = ci_lower, xmax = ci_upper), 
+                   height = 0.15, size = 1.2, alpha = 0.8,
+                   position = position_dodge(width = 0.6)) +
+    geom_point(size = 4, alpha = 0.9,
+               position = position_dodge(width = 0.6)) +
+    labs(
+      title = "Phy Parameter Comparison 2",
+      x = "Phi1 /& Phi2",
+      y = "Dataset",
+      color = "Parameter"
+    ) +
+    scale_y_discrete(labels = function(x) {
+      x <- gsub("org_data_", "", x)
+      x <- gsub("data_", "", x)
+      x <- gsub("_sated", "", x)
+      x <- gsub("parameter_subj", "Parameter", x)
+      tools::toTitleCase(x)
+    }) +
+    myTheme +
+    scale_color_manual(values = c(
+      "maaDDM: phy" = "#E31A1C",           # Red
+      "maaDDM2phi: phy" = "#1F78B4",       # Blue  
+      "maaDDM2phi: phy2" = "#33A02C"       # Green
+    ))
+  
+  return(p)
+}
+```
+
+
+```{r}
+# Create weight parameter plot
+weight_plot <- create_weight_plot(parameter_subj, "weight1_subj")
+print(weight_plot)
+
+# Create phy parameter plot
+phy_plot <- create_phy_plot(parameter_subj)
+print(phy_plot)
+
+phy_plot2 <- create_phy_plot2(parameter_subj)
+print(phy_plot2)
+
+# if phi of maaddm is not different than .5, 2phi model more appropriate??
+
+# ggsave("phy_plot.png", phy_plot, dpi=300)
+# ggsave("phy_plot2.png", phy_plot2, dpi=300)
+# ggsave("weight_plot.png", weight_plot, dpi=300)
+```
+
+
+
+
+
+

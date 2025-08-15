@@ -1,0 +1,576 @@
+---
+title: "Meta_modelfree"
+output: html_document
+date: "2024-10-23"
+---
+### Information
+The script used the data from Jenna (food, social, temporal discounting) and Yang et al., 2022 (clothing). Since the script relies on the data organized by other scripts (e.g., Behaviour/A_Preprocess.Rmd), WE HAVE TO RERUN THIS SCRIPT if any change in those files is made. 
+
+** RERUN THIS SCRIPT if any change in Behaviour/A_Preprocess.Rmd or in Behaviour/B_organizedata.Rmd is made. 
+
+### Inputs and Variables
+```{r}
+# Inputs: 
+# ../data/datasets.RData
+
+# Outputs:
+# 
+```
+
+### 1. Preparations
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+LibraryList <- c("readxl", "ggpubr", "rstatix", "readr", 
+                 "tidyr","dplyr","zoo", "ggplot2", "tibble",
+                 "tidyverse","ez","lme4", "lmerTest")
+invisible(lapply(LibraryList, library, character.only = TRUE))
+```
+
+
+### 2 desciptive and correlations
+[add descriptions]
+```{r}
+# clean the environment and load the organized data again
+rm(list=ls())
+load("data/datasets.RData")
+
+# Create a list of your datasets
+datasets <- list(data_clothing = data_clothing, 
+                 data_food_sated = org_data_food_sated,
+                 data_food_hungry = org_data_food_hungry,
+                 data_social_sated = org_data_social_sated,
+                 data_social_hungry = org_data_social_hungry, 
+                 data_discount_sated = org_data_discount_sated,
+                 data_discount_hungry = org_data_discount_hungry, 
+                 data_compassion= data_compassion, #JM
+                 data_envy = data_envy) # JM
+                 
+```
+#### 2.0 functions for calculations
+```{r}
+# group means based on subject, choice, fixation time (upper attribute), fixation time (lower attribute)
+calculate_mean <- function(data){
+  epslone <- 1e-10 
+  results <- data %>%
+    group_by(subject) %>%
+    summarise(
+      mean_rt = mean(RT, na.rm = TRUE),       # Mean of 'rt'
+      mean_choice = mean(response, na.rm = TRUE),  # Mean of 'choice'
+      mean_fixPropX = mean(fixProp1+fixProp3, na.rm = TRUE),
+      mean_fixPropA = mean((fixProp1+fixProp2), na.rm = TRUE),
+      mean_fixPropAdiff = mean(up_fixpropdiff, na.rm = TRUE),
+      mean_fixPropBdiff = mean(down_fixpropdiff, na.rm = TRUE),    
+      mean_fixDuration = mean(fixDuration, na.rm = TRUE),
+      mean_XA = mean(fixProp1, na.rm = TRUE),
+      mean_YA = mean(fixProp2, na.rm = TRUE),
+      mean_XB = mean(fixProp3, na.rm = TRUE),
+      mean_YB = mean(fixProp4, na.rm = TRUE))
+  return(results)
+}
+
+calculate_bin_mean <- function(data) {
+  results <- data %>%
+    group_by(subject, bin_data_fixPropX) %>%
+    summarise(mean_choice = mean(response, na.rm = TRUE), 
+              .groups = 'drop')  # Drop grouping after summarise
+  
+  results_attA <- data %>%
+    group_by(subject, bin_data_fixPropAdiff) %>%
+    summarise(mean_choice = mean(response, na.rm = TRUE), 
+              .groups = 'drop')  # Drop grouping after summarise
+  
+  results_attB <- data %>%
+    group_by(subject, bin_data_fixPropBdiff) %>%
+    summarise(mean_choice = mean(response, na.rm = TRUE), 
+              .groups = 'drop')  # Drop grouping after summarise
+  
+  return(
+    list(
+      results = results,
+      results_attA = results_attA,
+      results_attB = results_attB
+    )
+  )
+}
+```
+
+#### 2.1 desciptive results
+```{r}
+# Initialize an empty list to store the results
+mean_data_list <- list()
+
+# Loop through each dataset in the list
+count <- 0
+mean_of_mean <- matrix(data = NA, nrow = length(names(datasets)), ncol = 12)
+for (name in names(datasets)) {
+  count <- count +1
+  
+  # Compute the mean for the current dataset
+  mean_data_list[[name]] <- calculate_mean(datasets[[name]])
+  subdata <- mean_data_list[[name]] 
+  mean_of_mean[count, 1] <- name  # Store the dataset name
+  mean_of_mean[count, 2] <- round(mean(subdata$mean_rt),4)
+  mean_of_mean[count, 3] <- round(mean(subdata$mean_choice),4)
+  mean_of_mean[count, 4] <- round(mean(subdata$mean_fixPropX),4)
+  mean_of_mean[count, 5] <- round(mean(subdata$mean_fixPropA),4)
+  mean_of_mean[count, 6] <- round(mean(subdata$mean_fixPropAdiff),4)
+  mean_of_mean[count, 7] <- round(mean(subdata$mean_fixPropBdiff),4)
+  mean_of_mean[count, 8] <- round(mean(subdata$mean_fixDuration),4)
+  mean_of_mean[count, 9] <- round(mean(subdata$mean_XA),4)
+  mean_of_mean[count, 10] <- round(mean(subdata$mean_YA),4)
+  mean_of_mean[count, 11] <- round(mean(subdata$mean_XB),4)
+  mean_of_mean[count, 12] <- round(mean(subdata$mean_YB),4)
+}
+
+# add columns' names
+colnames(mean_of_mean) <- c("StudyName","rt", "choice_X", "fixPropX","fixPropA",
+                            "fixPropAdiff","fixPropBdiff","fixDuration",
+                            "fixPropXA","fixPropYA","fixPropXB","fixPropYB")
+```
+
+#### 2.2 Dwell-time advantage
+``` {r}
+# Initialize an empty list to store the results
+bin_data_list <- list()
+
+# preallocation 
+count <- 0
+level_name <- c("1","2","3","4","5")
+task_name <- names(datasets)
+mat_names <- c("bin_fixPropX", "bin_fixPropAdiff", "bin_fixPropBdiff")
+bin_summary <- setNames(
+  replicate(3, matrix(NA, nrow = length(names(datasets)), ncol = 5), simplify = FALSE),
+  mat_names
+)
+
+
+# Loop through each dataset in the list
+for (name in task_name) {
+  count <- count + 1
+  bin_data_list[[name]] <-
+    calculate_bin_mean(datasets[[name]])
+  
+  subdata <- bin_data_list[[name]]
+  
+  # Loop for each bin
+  for (k in 1:5) {
+    binIDX_option <- which(subdata$results$bin_data_fixPropX == k & !is.na(subdata$results$bin_data_fixPropX))
+    binIDX_attA <-
+      which(subdata$results_attA$bin_data_fixPropAdiff == k & !is.na(subdata$results_attA$bin_data_fixPropAdiff))
+    binIDX_attB <-
+      which(subdata$results_attB$bin_data_fixPropBdiff == k & !is.na(subdata$results_attB$bin_data_fixPropBdiff))
+    
+    # Compute the mean for the current dataset
+    # fix
+    bin_summary$bin_fixPropX[count, k] <-
+      mean(subdata$results$mean_choice[binIDX_option])
+     colnames(bin_summary$bin_fixPropX) <- level_name
+     rownames(bin_summary$bin_fixPropX) <- task_name
+    
+      # bin_mean_of_att1[count, k] <- name
+    bin_summary$bin_fixPropAdiff[count, k] <-
+      mean(subdata$results_attA$mean_choice[binIDX_attA])
+    colnames(bin_summary$bin_fixPropAdiff) <- level_name
+    rownames(bin_summary$bin_fixPropAdiff) <- task_name
+    
+     # bin_mean_of_att2[count, k] <- name
+    bin_summary$bin_fixPropBdiff[count, k] <-
+      mean(subdata$results_attB$mean_choice[binIDX_attB])
+     colnames(bin_summary$bin_fixPropBdiff) <- level_name
+     rownames(bin_summary$bin_fixPropBdiff) <- task_name
+  }
+}
+```
+
+#### 2.3 results visualization
+To do: try to plot bin_fixPropAdiff and bin_fixPropBdiff in the same figure for each (sated-condition) data
+
+Create Theme for Plots
+```{r}
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+```{r}
+# the data are reorganized as a multi-row variables with task and five levels of dwell-time advantage
+bin_data_ext <- function(D, task_name, level_name) {
+  bin_mean_extension <-
+    data.frame(
+      Task = rep(task_name, each = length(level_name)),
+      Level = rep(level_name, times = length(task_name)),
+      Probability = as.vector(t(as.matrix(D)))
+    )
+  #bin_mean_extension$Task <- factor(bin_mean_extension$Task)
+  bin_mean_extension$Level <- factor(bin_mean_extension$Level)
+  return(bin_mean_extension)
+}
+
+# proportion of dwell time on each attribute (will be compared with weighting in the next section)
+# Prob. (First fixation on each attribute)
+# Association of dwell time difference and choice
+## load data (with/without loop)
+vd_types <- c("fix. prop. for the left option", "fix. prop. difference for upper attribute (L>R)", "fix. prop. difference for lower attribute (L>R)")
+# JM: Rename!!
+
+for (k in c(1:3)) {
+  if (k == 1) {
+    temp_bin <- bin_summary$bin_fixPropX
+  } else if (k == 2) {
+    temp_bin <- bin_summary$bin_fixPropAdiff
+  } else if (k == 3) {
+    temp_bin <- bin_summary$bin_fixPropBdiff
+  }
+  
+vd_type <- vd_types[k]
+
+## load reshape the data
+bin_long <- bin_data_ext(temp_bin, task_name, level_name)
+
+## Function to plot tasks (you can decide task type: "clothing" "Food" "Social" "Discount")
+vd_choice_plot <- function(data, task_type, vd_type) {
+  task_filter <- grepl(task_type, data$Task)
+  
+  ### Filter by task type
+  data_filtered <- data[task_filter,]
+  
+  ### Check if there are any tasks to plot
+  if (nrow(data_filtered) == 0) {
+    message(paste("No tasks found for:", task_type))
+    return(NULL)
+  }
+  
+  # Determine task conditions
+  if  (any(data_filtered$Task == "data_clothing" | data_filtered$Task == "data_compassion" | data_filtered$Task == "data_envy")) {
+    data_filtered$Condition <- rep("Sated",5)
+  } else {
+    data_filtered$Condition <- ifelse(grepl("sated", data_filtered$Task), "Sated", "Hungry")
+  }
+  
+  
+  ### Initialize the plot (JM changes)
+  p <- ggplot(data_filtered, aes(x = Level, y = Probability, group = Task, color = Condition)) +
+    geom_smooth(method = "glm", se = FALSE, 
+              aes(fill = Condition), method.args = list(family=binomial), alpha = 0.3) +
+    labs(title = paste(task_type, "Tasks"), x = vd_type, y = "P (Left)") +
+    scale_linetype_manual(values = c("Sated" = "solid", "Hungry" = "dashed")) +
+    ylim(0, 1) +  # Set y-axis range
+    scale_color_manual(values = c("Sated" = "cornflowerblue", "Hungry" = "gold")) +
+    guides(linetype = guide_legend(title = "Condition"), color = guide_legend(title = "Condition")) +
+    geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+    geom_vline(xintercept = 3, color = "black", linetype = "dashed") +  
+    myTheme
+  
+  print(p)
+}
+
+# Plot for "clothing"
+vd_choice_plot(bin_long, "clothing", vd_type)
+vd_choice_plot(bin_long, "food", vd_type)
+vd_choice_plot(bin_long, "social", vd_type)
+vd_choice_plot(bin_long, "discount", vd_type)
+vd_choice_plot(bin_long, "compassion", vd_type)
+vd_choice_plot(bin_long, "envy", vd_type)
+}
+
+```
+
+### 3 Regression models
+```{r}
+# basic settings
+data_interested <- c("data_clothing", "org_data_food_sated", "org_data_food_hungry", "org_data_social_sated", "org_data_social_hungry","org_data_discount_sated", "org_data_discount_hungry", "data_compassion", "data_envy")
+
+# Define the models as a list of formulas
+GLMM_model_formulas <- list(
+  GLM1 = response ~ z_A_vd + z_B_vd + z_fixPropX,
+  
+  GLM2 = response ~ z_A_vd + z_B_vd + z_fixPropAdiff + z_fixPropBdiff
+  
+  #GLM3 = response_better_up ~ z_option_vd + z_A_vd + z_fixPropA
+  )
+
+# Initialize a list to store all glm results by dataset and model type
+glm_ind_results <- list()
+glmm_results <- list()
+
+# Setting global options to mute specific warnings
+options(lme4.warnOnlyOnce = FALSE)   # Muting warning repeats
+```
+
+#### 3.1 GLMM analysis
+```{r}
+# preparation
+library(car)
+minTrial <- 15
+  for (data_name in data_interested) {
+glmm_results[[data_name]] <- list()
+}
+
+# Loop through each model formula
+for (model_name in names(GLMM_model_formulas)) {
+  if (model_name == "GLM1") {
+      formula <- as.formula(paste(deparse(GLMM_model_formulas[[model_name]]),"+(1+z_fixPropX|subject)"))
+  } else if (model_name == "GLM2") {
+      formula <- as.formula(paste(deparse(GLMM_model_formulas[[model_name]]),"+(1+z_fixPropAdiff + z_fixPropBdiff|subject)"))
+  # } else if (model_name == "GLM3") {
+  #   formula <- as.formula(paste(deparse(GLMM_model_formulas[[model_name]]),"+(1+z_fixPropAdiff + z_fixPropA|subject)"))
+   }
+
+      
+  # Loop through each dataset
+  for (data_name in data_interested) {
+
+    # Retrieve the dataset using `get`
+    dataset <- get(data_name)
+    subjlist <- unique(dataset$subject)
+  
+    # Run the GLM model and store the result
+    glmm_results[[data_name]][[model_name]] <- glmer(
+      formula,
+      data = dataset,
+      family = binomial(link = "logit"),
+      control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 5e5))
+    )
+  }
+}
+
+# Save GLM results
+# Define file name
+file_name <- paste0("GLMMresults_minTrial_", minTrial, ".Rdata")
+save(data_interested, GLMM_model_formulas, glmm_results, file = file_name)
+# aic_glm_ind suggest that modelX is the best model to explain choice for all datasets!
+```
+
+```{r}
+summary(glmm_results$data_clothing$GLM2)
+summary(glmm_results$org_data_food_sated$GLM2)
+summary(glmm_results$org_data_food_hungry$GLM2)
+summary(glmm_results$org_data_social_sated$GLM2)
+summary(glmm_results$org_data_social_hungry$GLM2)
+summary(glmm_results$org_data_discount_sated$GLM2)
+summary(glmm_results$org_data_discount_hungry$GLM2)
+summary(glmm_results$data_compassion$GLM2)
+summary(glmm_results$data_envy$GLM2)
+```
+
+
+#### 3.2 Visualise GLMMs (JM)
+
+```{r}
+extract_all_coefficients <- function(model_list, dataset_names, model_type = "GLM2") {
+  all_coefs <- data.frame()
+  
+  for (i in 1:length(dataset_names)) {
+    # Extract fixed effects with confidence intervals
+    coefs <- tidy(model_list[[dataset_names[i]]][[model_type]], 
+                  effects = "fixed", 
+                  conf.int = TRUE)
+    
+    # Add dataset identifier and model type
+    coefs$dataset <- dataset_names[i]
+    coefs$model <- model_type
+    
+    # Combine with other datasets
+    all_coefs <- rbind(all_coefs, coefs)
+  }
+  
+  return(all_coefs)
+}
+
+# Function to clean dataset names for plotting
+clean_dataset_names <- function(dataset_names) {
+  cleaned <- gsub("org_data_", "", dataset_names)
+  cleaned <- gsub("data_", "", cleaned)
+  cleaned <- gsub("_", " ", cleaned)
+  return(tools::toTitleCase(cleaned))
+}
+
+library("viridis")  
+library(broom.mixed)
+library(patchwork) 
+# Extract coefficients for GLM2 (or change to GLM1/GLM3 as needed)
+all_coefficients <- extract_all_coefficients(glmm_results, data_interested, "GLM2")
+
+# Clean dataset names for better plotting
+all_coefficients$dataset_clean <- rep(clean_dataset_names(data_interested), 
+                                      each = length(unique(all_coefficients$term)))
+
+all_coefficients$type <- ifelse(grepl("_vd$", all_coefficients$term), "VD", "DT")
+
+# Remove intercept 
+all_coefficients <- all_coefficients[all_coefficients$term != "(Intercept)", ]
+
+# Get unique coefficient names
+unique_terms <- unique(all_coefficients$term)
+
+# change order
+desired_order <- c("Food Sated", "Food Hungry", "Social Sated", "Social Hungry", "Discount Sated", "Discount Hungry", 
+                   "Clothing", "Compassion", "Envy")
+
+# Convert dataset_clean to factor with your desired order
+all_coefficients$dataset_clean <- factor(all_coefficients$dataset_clean, levels = desired_order)
+
+# Create individual plots for each coefficient
+plot_list <- list()
+
+for (term in unique_terms) {
+  # Filter data for this coefficient
+  coef_data <- all_coefficients[all_coefficients$term == term, ]
+  
+  # Create plot
+  p <- ggplot(coef_data, aes(x = estimate, y = dataset_clean, color = dataset_clean)) +
+    geom_point(size = 3) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0.2) +
+    geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.7) +
+    labs(title = paste("Coefficient:", term),
+         x = paste("Coef.:", term),#"Dataset",
+         y = "Dataset")+ #paste("Coef.:", term)) +
+    myTheme +
+    theme(legend.position = "none") +  # Add bottom margin for rotated labels
+    scale_color_viridis(discrete = TRUE, option = "plasma")
+  
+  plot_list[[term]] <- p
+}
+
+# Display individual plots
+for (term in names(plot_list)) {
+  print(plot_list[[term]])
+}
+
+# ggsave("A_vd_coeff.png", plot_list$z_A_vd, dpi=300)
+# ggsave("B_vd_coeff.png", plot_list$z_B_vd, dpi=300)
+# ggsave("fixPropAdiff_coeff.png", plot_list$z_fixPropAdiff, dpi=300)
+# ggsave("fixPropBdiff_coeff.png", plot_list$z_fixPropBdiff, dpi=300)
+
+```
+
+
+```{r}
+# Alternative version with grouped bars (side by side within each dataset)
+create_grouped_coefficient_plots <- function(all_coefficients) {
+  
+  # Remove intercept rows
+  plot_data <- all_coefficients[all_coefficients$term != "(Intercept)", ]
+  
+  # Create a short term name
+  plot_data$term_short <- gsub("z_", "", plot_data$term)
+  
+  # Define dataset order
+  dataset_order <- c("Clothing", "Compassion", "Envy", "Food Sated", "Food Hungry", 
+                     "Social Sated", "Social Hungry", "Discount Sated", "Discount Hungry")
+  
+  plot_data$dataset_clean <- factor(plot_data$dataset_clean, levels = dataset_order)
+  
+  # Plot 1: VD coefficients (grouped by dataset)
+  vd_data <- plot_data[plot_data$type == "VD", ]
+  
+  vd_grouped_plot <- ggplot(vd_data, aes(x = dataset_clean, y = estimate, fill = term_short)) +
+    geom_col(position = position_dodge(width = 0.8), width = 0.7, alpha = 0.8) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high), 
+                  position = position_dodge(width = 0.8), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.7) +
+    labs(title = "",
+         x = "Dataset",
+         y = "Coefficient", 
+         fill = "Coefficient") +
+    myTheme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+          plot.title = element_text(hjust = 0.5)) +
+    scale_fill_manual(values = c("A_vd" = "hotpink1","B_vd" = "hotpink4"),
+                      labels = c("A_vd" = "VD(A)-VD(B)","B_vd" = "VD(B)-VD(A)"))
+  
+  # Plot 2: DT coefficients (grouped by dataset)
+  dt_data <- plot_data[plot_data$type == "DT", ]
+  
+  dt_grouped_plot <- ggplot(dt_data, aes(x = dataset_clean, y = estimate, fill = term_short)) +
+    geom_col(position = position_dodge(width = 0.8), width = 0.7, alpha = 0.8) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high), 
+                  position = position_dodge(width = 0.8), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.7) +
+    labs(title = "",
+         x = "Dataset",
+         y = "Coefficient ",
+         fill = "Coefficient") +
+    myTheme +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+          plot.title = element_text(hjust = 0.5)) +
+    scale_fill_manual(values = c("fixPropAdiff" = "hotpink1","fixPropBdiff" = "hotpink4"), 
+                      labels = c("fixPropAdiff" = "DT(A) - DT(B)","fixPropBdiff" = "DT(B) - DT(A)"))
+  
+  return(list(vd_grouped = vd_grouped_plot, dt_grouped = dt_grouped_plot))
+}
+
+# Generate the plots
+sated_coefficients <- subset(all_coefficients, !(dataset_clean %in% c("Food Hungry", "Social Hungry", "Discount Hungry", "Envy")))
+
+grouped_plots <- create_grouped_coefficient_plots(sated_coefficients)
+
+grouped_plots$vd_grouped
+grouped_plots$dt_grouped
+
+ggsave("VD_coeff.png", grouped_plots$vd_grouped, dpi=300)
+ggsave("DT_coeff.png", grouped_plots$dt_grouped, dpi=300)
+```
+
+
+
+
+
+#### 3.3 test dwell-time advantage
+JM: I do not think this is a valid approach!!
+```{r}
+#file_name <- paste0("GLMMresults_minTrial_", minTrial, ".Rdata")
+#load(file_name)
+t_test_results <- matrix(NA, nrow = length(data_interested), ncol = 5) # mean, t-value, df, p-value
+
+for (D in 1:length(data_interested)) {
+  fix_effect<-fixef(glmm_results[[data_interested[D]]]$GLM2)
+  rand_effect_DW_A<-ranef(glmm_results[[data_interested[D]]]$GLM2)$subject[,"z_fixPropAdiff"]
+  rand_effect_DW_B<-ranef(glmm_results[[data_interested[D]]]$GLM2)$subject[,"z_fixPropBdiff"]
+  
+  A<-fix_effect["z_fixPropAdiff"] + rand_effect_DW_A
+  B<-fix_effect["z_fixPropBdiff"] + rand_effect_DW_B
+  
+  t_test <- t.test(A,B,paired=TRUE) #A,B,paired=TRUE
+        # summary of ttest results
+      temp_t_test_results <- data.frame(
+        datatype = data_interested[D],
+        beta = as.numeric(t_test$estimate),
+        beta_SE = sd(A-B)/sqrt(as.numeric(t_test$parameter)+1),
+        t = as.numeric(t_test$statistic),
+        df = as.numeric(t_test$parameter),
+        p = t_test$p.value
+      )
+      
+      
+      # combine dataframe
+      if (D == 1) {
+        t_test_results <- temp_t_test_results
+      } else {
+        t_test_results <- rbind(t_test_results,temp_t_test_results)
+      }
+}
+
+```
+#### 3.3 GLMM results visualization
+[update later] --> see above 
+
+
