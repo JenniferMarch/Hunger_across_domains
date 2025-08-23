@@ -1,0 +1,262 @@
+---
+title: "aDDM"
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
+date: "3/26/2024"
+output: html_document
+---
+
+# General Info
+
+This script contains all the models tested in our manuscript (https://osf.io/preprints/psyarxiv/wvfnb). It requires JAGS. The script is structured s follows:
+
+1. **Preparation:** loading libraries and load workspace
+2. **Attentional DDM:** Function, Estimate aDDM, Test Parameters and some graphs (corresponds to aDDM)
+
+# 1 Preparations
+## 1.1 Load Libraries
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+#if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(rtdists)
+library(dfoptim)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library(tibble)
+library(readr)
+pacman::p_load(tidyverse, ez)
+#parallel computing stuff
+library(parallel)
+library(doParallel)
+library(foreach)
+numCores <- detectCores()
+registerDoParallel(cores=numCores)
+#JAGS packages
+library(R2jags) #should be put at the start but keep it here for the moment...
+library(rtdists) #to be on the safe side when loading workspace (and not executing the first chunk above)
+```
+
+## 1.2 Create Theme for Plots
+```{r}
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(),   
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=20, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=20, face="bold", colour = "black"),
+  axis.text = element_text(size=16),
+  strip.text =  element_text( size=16),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+## 1.3 Load workspace 
+```{r}
+# load data
+setwd("~/Desktop/WorkingProjects/JM_maaDDM/Hunger_across_domains/Modeling/Cloth")
+load("../../data/datasets.RData")
+data <- c()
+data <- org_data_social_sated
+# try Jenna's
+# load("../Social/data_social_prep.RData")
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+# only include valid trials
+validT <- which((is.na(data$fixProp1)==0)|(is.na(data$fixProp2)==0)|(is.na(data$fixProp3)==0)|(is.na(data$fixProp4)==0))
+data <- data[validT, ]
+N <- length(data$RT)
+S <- length(unique(data$subject))
+
+```
+
+
+# 2 Attentional DDM 
+## 2.1 Estimate maaDDM_noPhi with hierarchical Bayesian modeling (JAGS)
+```{r}
+# get data and initial values together and specify the model
+ddmData <- list('N'=N,'S'=S,'P'=data$P_subj,'attribute1A'=data$scl_upleft_val,'attribute1B'=data$scl_upright_val,'attribute2A'=data$scl_downleft_val,'attribute2B'=data$scl_downright_val,'RT'=data$RT_right/1000,'fixProp1'=data$fixProp1,'fixProp2'=data$fixProp2,'fixProp3'=data$fixProp3,'fixProp4'=data$fixProp4)
+
+#starting values
+# nChains <- 8
+nChains <- 3
+
+#parallel computing apparently not possible
+T1<-Sys.time()
+addm_social <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+'mu_drift','sigma_drift','mu_weight1','sigma_weight1', 
+'mu_theta','sigma_theta',
+'bound','ndt','drift','weight1','theta'),
+
+model.file = "BayesModel_maaDDM_noPhi.txt", 
+
+working.directory = '../BayesModels_noHungry',
+
+# n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
+n.chains = nChains, n.iter = 7000, n.burnin = 500,n.thin = 2, 
+DIC = TRUE,jags.module = c("glm","dic","wiener"))
+
+# Check duration of computing 
+T2<-Sys.time() #T2-T1
+
+# check convergence
+ddmRhats <- addm_social$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+addm_social$BUGSoutput$DIC
+
+save.image(file='addm_social.RData')
+
+```
+
+# 2.2 maaDDM
+```{r}
+#starting values
+# nChains <- 8
+nChains <- 3
+
+#parallel computing apparently not possible
+T1<-Sys.time()
+maaDDM_social <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                                           'mu_theta','sigma_theta','mu_phy','sigma_phy',
+                                           'bound','ndt','drift','weight1','theta','phy'),
+
+model.file = "BayesModel_maaDDM.txt", 
+
+working.directory = '../BayesModels_noHungry',
+
+# n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
+n.chains = nChains, n.iter = 7000, n.burnin = 500,n.thin = 2, 
+DIC = TRUE,jags.module = c("glm","dic","wiener"))
+
+# Check duration of computing 
+T2<-Sys.time() #T2-T1
+
+# check convergence and fit
+ddmRhats <- maaDDM_social$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+maaDDM_social$BUGSoutput$DIC
+#max R_hat = 1.032; DIC = 30546.33
+save.image(file='maaDDM_social.RData')
+```
+
+# 2.3 maaDDM_2Phi
+```{r}
+#starting values
+# nChains <- 8
+nChains <- 3
+
+#parallel computing apparently not possible
+T1<-Sys.time()
+maa2phiDDM_social <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                                           'mu_theta','sigma_theta','mu_phy','sigma_phy', 'mu_phy2','sigma_phy2', 
+                                           'bound','ndt','drift','weight1','theta','phy', 'phy2'),
+
+model.file = "BayesModel_maaDDM_2Phi.txt", 
+
+working.directory = '../BayesModels_noHungry',
+
+# n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, 
+n.chains = nChains, n.iter = 7000, n.burnin = 500,n.thin = 2, 
+DIC = TRUE,jags.module = c("glm","dic","wiener"))
+
+# Check duration of computing 
+T2<-Sys.time() #T2-T1
+
+# check convergence and fit
+ddmRhats <- maa2phiDDM_social$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+maa2phiDDM_social$BUGSoutput$DIC
+#max R_hat = 1.032; DIC = 30546.33
+save.image(file='maa2phiDDM_social.RData')
+```
+
+# 3 Check Parameters (group posteriors)
+```{r}
+load(file='maa2phiDDM_social.RData')
+```
+
+```{r}
+#get group parameter estimates in transformed form 
+#ddm_results <- addm_social
+#ddm_results <- maaDDM_social
+ddm_results <- maa2phiDDM_social
+
+boundSep <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_bound))
+ndt <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_ndt))
+
+weight1 <- pnorm(ddm_results$BUGSoutput$sims.list$mu_weight1)
+drift <- log(1+exp(ddm_results$BUGSoutput$sims.list$mu_drift))
+
+theta <- pnorm(ddm_results$BUGSoutput$sims.list$mu_theta)
+phy <- pnorm(ddm_results$BUGSoutput$sims.list$mu_phy)
+phy2 <- pnorm(ddm_results$BUGSoutput$sims.list$mu_phy2)
+```
+
+```{r}
+# List of variable names, labels, and binwidths for each plot
+est_parameters <- list(
+  list(name = "weight1", label = "Self Weight", binwidth = 1/500, maxY = 500),
+  list(name = "drift", label = "Drift Scaling", binwidth = 1/400, maxY = 500),
+  list(name = "boundSep", label = "Boundary Separation", binwidth = 1/300, maxY = 500),
+  list(name = "ndt", label = "Non-Decision Time", binwidth = 1/150, maxY = 500),
+  list(name = "theta", label = "Theta", binwidth = 1/850, maxY = 500),
+  list(name = "phy", label = "phy", binwidth = 1/800, maxY = 250),
+  list(name = "phy2", label = "phy2", binwidth = 1/800, maxY = 250)
+)
+
+# List to store plots
+plot_list <- list()
+
+# Loop over variables to create each plot
+for (i in seq_along(est_parameters)) {
+  param <- est_parameters[[i]]
+  
+  # Dynamically create data frame based on variable name
+  param_data <- data.frame(value = get(param$name))
+  
+  # Create the plot
+  plot_list[[i]] <- ggplot(param_data, aes(x = value)) +
+    geom_histogram(binwidth = param$binwidth, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+    labs(x = param$label, y = "Frequency") +
+    ylim(0, param$maxY) +
+    myTheme
+}
+
+# Display plots (e.g., print(plot_list[[1]]), print(plot_list[[2]]), etc.)
+
+```
+
+```{r}
+# difference between phy
+phy_delta <- ddm_results$BUGSoutput$sims.list$mu_phy2-ddm_results$BUGSoutput$sims.list$mu_phy
+data_delta_phy <- data.frame(phy_delta = phy_delta)
+HDI_phy <- quantile(phy_delta,c(.025,.975))
+
+# Plot using ggplot2
+phy_plot<-ggplot(data_delta_phy, aes(x = phy_delta)) +
+  geom_histogram(binwidth = 1/110, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_phy, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 500)+
+  labs(x = "Phy2>Phy1", y = "Frequency") +
+  myTheme
+# phy2 is significantly smaller than phy1
+```
+
