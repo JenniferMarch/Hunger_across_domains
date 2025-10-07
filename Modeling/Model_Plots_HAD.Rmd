@@ -1,0 +1,1226 @@
+---
+title: "HAD_food"
+output: html_document
+date: "2025-02-12"
+---
+
+## Information
+
+## 2 Preparation
+### 2.1 Create Theme
+```{r}
+library(ggplot2)
+
+digits <- function(x) {
+  # Format to 1 decimal place
+  formatted <- sprintf("%.1f", x)
+  # For whole numbers, remove the decimal point and zero
+  formatted <- gsub("\\.0$", "", formatted)
+  return(formatted)
+}
+
+digits2 <- function(x) {
+  # Format to 1 decimal place
+  formatted <- sprintf("%.2f", x)
+  # For whole numbers, remove the decimal point and zero
+  formatted <- gsub("\\.0$", "", formatted)
+  return(formatted)
+}
+
+
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), 
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),  
+  panel.border = element_blank(), 
+  plot.margin = margin(10, 15, 10, 15, "pt"),
+  panel.background = element_blank(),
+  text=element_text(size=16, colour = "black"), 
+  axis.title.x = element_text(size=16, face="bold", colour = "black", margin = margin(t = 15)), 
+  axis.title.y = element_text( size=16, face="bold", colour = "black", margin = margin(t = 15)),
+  axis.text = element_text(size=14),
+  strip.text =  element_text( size=14),
+  strip.background = element_blank(),#element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"),
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+### 2.2 Load Data
+```{r}
+load("maaDDM2phisp_food.RData")
+load("maaDDM2phisp_social.RData")
+load("maaDDM2phisp_discount.RData")
+
+```
+
+### 2.3 Set Up data
+#### 2.3.1 Food
+```{r}
+weight1_S <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1)
+weight1_H <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1_H)
+weight1_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1_H
+
+theta_S <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta)
+theta_H <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta_H)
+theta_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta_H
+
+phy_S <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy)
+phy_H <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy_H)
+phy_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy_H
+
+phy2_S <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2)
+phy2_H <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2_H)
+phy2_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2_H
+
+sp_S <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp)
+sp_H <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp_H)
+sp_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp_H
+
+
+# supplements
+boundSep_S <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound))
+boundSep_H <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound_H))
+boundSep_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound_H
+
+ndt_S <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt))
+ndt_H <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt_H))
+ndt_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt_H
+
+drift_S <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift))
+drift_H <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift_H))
+drift_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift_H
+
+
+```
+
+#### 2.3.1 Social
+```{r}
+weightS_social <- pnorm(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_weight1)
+weightH_social <- pnorm(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_weight1+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_weight1_H)
+weight_social_delta <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_weight1_H
+
+thetaS_social <- (maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_theta)
+thetaH_social <- (maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_theta+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_theta_H)
+theta_social_delta <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_theta_H
+
+phyS_self <- (maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy)
+phyH_self <- (maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy_H)
+phy_self_delta <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy_H
+
+phyS_ngo <- (maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy2)
+phyH_ngo <- (maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy2+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy2_H)
+phy_ngo_delta <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_phy2_H
+
+sp_S_social <- pnorm(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_sp)
+sp_H_social <- pnorm(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_sp+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_sp_H)
+sp_social_delta <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_sp_H
+
+# supplements
+boundSep_S_social <- log(1+exp(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_bound))
+boundSep_H_social  <- log(1+exp(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_bound+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_bound_H))
+boundSep_delta_social  <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_bound_H
+
+ndt_S_social  <- log(1+exp(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_ndt))
+ndt_H_social  <- log(1+exp(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_ndt+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_ndt_H))
+ndt_delta_social  <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_ndt_H
+
+drift_S_social  <- log(1+exp(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_drift))
+drift_H_social  <- log(1+exp(maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_drift+maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_drift_H))
+drift_delta_social  <- maaDDM2phi_sp_social$BUGSoutput$sims.list$mu_drift_H
+
+```
+
+#### 2.3.1 Discount
+```{r}
+weightS_discount <- pnorm(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_weight1)
+weightH_discount <- pnorm(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_weight1+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_weight1_H)
+weight_discount_delta <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_weight1_H
+
+thetaS_discount <- (maaDDM2phisp_discount$BUGSoutput$sims.list$mu_theta)
+thetaH_discount <- (maaDDM2phisp_discount$BUGSoutput$sims.list$mu_theta+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_theta_H)
+theta_discount_delta <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_theta_H
+
+phyS_delay <- (maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy)
+phyH_delay <- (maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy_H)
+phy_delay_delta <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy_H
+
+phyS_amount <- (maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy2)
+phyH_amount <- (maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy2+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy2_H)
+phy_amount_delta <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_phy2_H
+
+sp_S_discount <- pnorm(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_sp)
+sp_H_discount <- pnorm(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_sp+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_sp_H)
+sp_discount_delta <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_sp_H
+
+# supplements
+boundSep_S_discount <- log(1+exp(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_bound))
+boundSep_H_discount  <- log(1+exp(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_bound+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_bound_H))
+boundSep_delta_discount  <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_bound_H
+
+ndt_S_discount  <- log(1+exp(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_ndt))
+ndt_H_discount  <- log(1+exp(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_ndt+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_ndt_H))
+ndt_delta_discount  <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_ndt_H
+
+drift_S_discount  <- log(1+exp(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_drift))
+drift_H_discount  <- log(1+exp(maaDDM2phisp_discount$BUGSoutput$sims.list$mu_drift+maaDDM2phisp_discount$BUGSoutput$sims.list$mu_drift_H))
+drift_delta_discount  <- maaDDM2phisp_discount$BUGSoutput$sims.list$mu_drift_H
+```
+
+## 3 Plot Data
+### 3.1 Food
+```{r}
+#1) Taste Weight 
+histGran <- (-300:300)/150
+# Create a data frame
+datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
+# Plot using ggplot2
+tasteweight1<-ggplot(datatw, aes(x = weight1_S)) +
+  geom_histogram(binwidth = 1/80, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weight1_H), binwidth = 1/80, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Taste Weight", y = "Frequency") +
+  scale_x_continuous(labels = digits)+
+  ylim(0, 5000)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+# effect of hunger 
+data_deltatw <- data.frame(weight1_delta = weight1_delta)
+HDI_tw <- quantile(weight1_delta,c(.025,.975))
+
+HDI_twH <- quantile(weight1_H,c(.025,.975))
+HDI_twS <- quantile(weight1_S,c(.025,.975))
+
+# 5) Theta
+histGran <- (-300:300)/150
+# Create a data frame
+datatheta <- data.frame(theta_S = theta_S, theta_H = theta_H)
+# Plot using ggplot2
+theta1<-ggplot(datatheta, aes(x = theta_S)) +
+  geom_histogram(binwidth = 1/70, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = theta_H), binwidth = 1/70, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Theta", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+HDI_theta_h <- quantile(theta_H,c(.025,.975))
+HDI_theta_s <- quantile(theta_S,c(.025,.975))
+
+# effect of hunger 
+data_deltatheta <- data.frame(theta_delta = theta_delta)
+HDI_theta <- quantile(theta_delta,c(.025,.975))
+
+
+# 6) Phi 1 (taste)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy <- data.frame(phy_S = phy_S, phy_H = phy_H)
+# Plot using ggplot2
+phy1<-ggplot(dataphy, aes(x = phy_S)) +
+  geom_histogram(binwidth = 1/25, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phy_H), binwidth = 1/25, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Taste", y = "Frequency") +
+  ylim(0, 5000)+
+  xlim(min(dataphy), max(dataphy))+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# effect of hunger 
+data_deltaphy <- data.frame(value = phy_delta)
+HDI_phy <- quantile(phy_delta,c(.025,.975))
+HDI_phyH <- quantile(phy_H,c(.025,.975))
+HDI_phyS <- quantile(phy_S,c(.025,.975))
+
+
+# 7) Phi2 (health)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy2 <- data.frame(phy2_S = phy2_S, phy2_H = phy2_H)
+# Plot using ggplot2
+phy3<-ggplot(dataphy2, aes(x = phy2_S)) +
+  geom_histogram(binwidth = 1/15, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phy2_H), binwidth = 1/15, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Health", y = "Frequency") +
+  ylim(0, 5000)+
+  xlim(-0.2, 1.3)+
+  scale_x_continuous(breaks = c(0, 0.5, 1),labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+library(tidyverse)
+# effect of hunger 
+data_deltaphy2 <- data.frame(value = phy2_delta)
+HDI_phy2 <- quantile(phy2_delta,c(.025,.975))
+HDI_phy2S <- quantile(phy2_S,c(.025,.975))
+HDI_phy2H <- quantile(phy2_H,c(.025,.975))
+
+
+quantile((phy_S-phy2_S),c(.025,.975))
+quantile((phy_H-phy2_H),c(.025,.975))
+
+
+# 5) Starting Point
+histGran <- (-300:300)/150
+# Create a data frame
+datasp <- data.frame(sp_S = sp_S, sp_H = sp_H)
+# Plot using ggplot2
+sp1<-ggplot(datasp, aes(x = sp_S)) +
+  geom_histogram(binwidth = 1/650, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = sp_H), binwidth = 1/650, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Starting Point", y = "Frequency") +
+  ylim(0, 5000)+
+  #xlim(0.48, 0.53)+
+  scale_x_continuous(breaks = c(0.49, 0.51, 0.53), labels = digits2)+
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# effect of hunger 
+data_deltasp <- data.frame(value = sp_delta)
+HDI_sp <- quantile(sp_delta,c(.025,.975))
+HDI_spH <- quantile(sp_H,c(.025,.975))
+HDI_spS <- quantile(sp_S,c(.025,.975))
+
+
+library("cowplot")
+# model_plot<- plot_grid(sp1, tasteweight1, theta1, phy1, phy3, ncol = 5, align = "h", column_spacing = unit(c(1.5, 1.5, 1.5, 1.5), "cm"))
+# model_plot
+# # Save the combined plot as a PNG file
+# ggsave("model_plot.png", model_plot, width=18, height=6)
+
+```
+### 3.2 Social
+```{r}
+#1) Self Weight 
+histGran <- (-300:300)/150
+# Create a data frame
+datasw <- data.frame(weightS_social = weightS_social, weightH_social = weightH_social)
+# Plot using ggplot2
+weight_social<-ggplot(datasw, aes(x = weightS_social)) +
+  geom_histogram(binwidth = 1/100, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weightH_social), binwidth = 1/100, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Self Weight", y = "Frequency") +
+  scale_x_continuous(labels = digits)+
+  ylim(0, 5000)+
+  myTheme+
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+HDI_w_social <- quantile(weight_social_delta,c(.025,.975))
+HDI_w_socialS <- quantile(weightS_social,c(.025,.975))
+HDI_w_socialH <- quantile(weightH_social,c(.025,.975))
+
+# 2) Theta
+histGran <- (-300:300)/150
+# Create a data frame
+datatheta_social <- data.frame(thetaS_social = thetaS_social, thetaH_social = thetaH_social)
+# Plot using ggplot2
+theta_social<-ggplot(datatheta_social, aes(x = thetaS_social)) +
+  geom_histogram(binwidth = 1/100, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = thetaH_social), binwidth = 1/100, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Theta", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+HDI_t_social <- quantile(theta_social_delta,c(.025,.975))
+HDI_t_socialS <- quantile(thetaS_social,c(.025,.975))
+HDI_t_socialH <- quantile(thetaH_social,c(.025,.975))
+
+
+# 3) Phi 1 (self)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy_social <- data.frame(phyS_self = phyS_self, phyH_self = phyH_self)
+# Plot using ggplot2
+phy_self<-ggplot(dataphy_social, aes(x = phyS_self)) +
+  geom_histogram(binwidth = 1/25, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phyH_self), binwidth = 1/25, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Self", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# effect of hunger 
+data_deltaphy <- data.frame(value = phy_delta)
+HDI_phy_social <- quantile(phy_self_delta, c(.025,.975))
+# Plot using ggplot2
+
+HDI_p1_social <- quantile(phyS_self,c(.025,.975))
+HDI_p2_social <- quantile(phyH_self,c(.025,.975))
+
+
+# 4) Phi2 (ngo)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy_social2 <- data.frame(phyS_ngo = phyS_ngo, phyH_ngo = phyH_ngo)
+# Plot using ggplot2
+phy_ngo<-ggplot(dataphy_social2, aes(x = phyS_ngo)) +
+  geom_histogram(binwidth = 1/35, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phyH_ngo), binwidth = 1/35, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi NGO", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+HDI_phy_social <- quantile(phy_ngo_delta, c(.025,.975))
+HDI_p3_social <- quantile(phyS_ngo,c(.025,.975))
+HDI_p4_social <- quantile(phyH_ngo,c(.025,.975))
+
+quantile((phyS_self-phyS_ngo),c(.025,.975))
+quantile((phyH_self-phyH_ngo),c(.025,.975))
+
+
+# 5) Starting Point
+histGran <- (-300:300)/150
+# Create a data frame
+datasp_social <- data.frame(sp_S_social = sp_S_social, sp_H_social = sp_H_social)
+# Plot using ggplot2
+sp_social<-ggplot(datasp_social, aes(x = sp_S_social)) +
+  geom_histogram(binwidth = 1/300, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(sp_H_social), binwidth = 1/300, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Starting Point", y = "Frequency") +
+  ylim(0, 5000)+
+  #xlim(0.48, 0.53)+
+  scale_x_continuous(labels = digits2)+
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# effect of hunger 
+data_deltasp_social <- data.frame(value = sp_social_delta)
+HDI_sp_social <- quantile(sp_social_delta,c(.025,.975))
+HDI_spH_social <- quantile(sp_H_social,c(.025,.975))
+HDI_spS_social <- quantile(sp_S_social,c(.025,.975))
+
+library("cowplot")
+# model_plot_social<- plot_grid(sp_social, weight_social, theta_social, phy_self, phy_ngo, ncol = 5, align = "h", column_spacing = unit(c(1.5, 1.5, 1.5, 1.5), "cm"))
+# model_plot_social
+# # Save the combined plot as a PNG file
+# ggsave("model_plot_social.png", model_plot_social, width=18, height=6)
+```
+
+### 3.3 Discount 
+```{r}
+#1) Taste Weight 
+histGran <- (-300:300)/150
+# Create a data frame
+datatw <- data.frame(weightS_discount = weightS_discount, weightH_discount = weightH_discount)
+# Plot using ggplot2
+weight_discount<-ggplot(datatw, aes(x = weightS_discount)) +
+  geom_histogram(binwidth = 1/100, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weightH_discount), binwidth = 1/100, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Delay Weight", y = "Frequency") +
+  scale_x_continuous(labels = digits)+
+  ylim(0, 5000)+
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+HDI_w_discount <- quantile(theta_discount_delta,c(.025,.975))
+HDI_w_discountS <- quantile(weightS_discount,c(.025,.975))
+HDI_w_discountH <- quantile(weightH_discount,c(.025,.975))
+
+# 2) Theta
+histGran <- (-300:300)/150
+# Create a data frame
+datatheta_discount <- data.frame(thetaS_discount = thetaS_discount, thetaH_discount = thetaH_discount)
+# Plot using ggplot2
+theta_discount<-ggplot(datatheta_discount, aes(x = thetaS_discount)) +
+  geom_histogram(binwidth = 1/100, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = thetaH_discount), binwidth = 1/100, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Theta", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+HDI_t_discount <- quantile(theta_discount_delta,c(.025,.975))
+HDI_t_discountS <- quantile(thetaS_discount,c(.025,.975))
+HDI_t_discountH <- quantile(thetaH_discount,c(.025,.975))
+
+
+# 3) Phi 1 (Time)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy_discount <- data.frame(phyS_delay = phyS_delay, phyH_delay = phyH_delay)
+# Plot using ggplot2
+phy_delay<-ggplot(dataphy_discount, aes(x = phyS_delay)) +
+  geom_histogram(binwidth = 1/12, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phyH_delay), binwidth = 1/12, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Delay", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# effect of hunger 
+data_deltaphy <- data.frame(value = phy_delta)
+HDI_phy_disocunt <- quantile(phy_delay_delta,c(.025,.975))
+
+HDI_p2_discountS <- quantile(phyS_delay,c(.025,.975))
+HDI_p2_discountH <- quantile(phyH_delay,c(.025,.975))
+
+# 4) Phi2 (Amount)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy_discount2 <- data.frame(phyS_amount = phyS_amount, phyH_amount = phyH_amount)
+# Plot using ggplot2
+phy_amount<-ggplot(dataphy_discount2, aes(x = phyS_amount)) +
+  geom_histogram(binwidth = 1/25, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phyH_amount), binwidth = 1/25, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Amount", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+phy_amount
+
+HDI_phy_amount<- quantile(phy_amount_delta,c(.025,.975))
+
+HDI_discountS_amount <- quantile(phyS_amount,c(.025,.975))
+HDI_discountH_amount <- quantile(phyH_amount,c(.025,.975))
+
+quantile((phyS_delay-phyS_amount),c(.025,.975))
+quantile((phyH_delay-phyH_amount),c(.025,.975))
+
+# 5) Starting Point
+histGran <- (-300:300)/150
+# Create a data frame
+datasp_discount <- data.frame(sp_S_discount = sp_S_discount, sp_H_discount = sp_H_discount)
+# Plot using ggplot2
+sp_discount<-ggplot(datasp_discount, aes(x = sp_S_discount)) +
+  geom_histogram(binwidth = 1/300, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(sp_H_discount), binwidth = 1/300, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Starting Point", y = "Frequency") +
+  ylim(0, 5000)+
+  #xlim(0.48, 0.53)+
+  scale_x_continuous(labels = digits2)+
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# effect of hunger 
+data_deltasp_discount <- data.frame(value = sp_discount_delta)
+HDI_sp_discount <- quantile(sp_discount_delta,c(.025,.975))
+HDI_spH_discount <- quantile(sp_H_discount,c(.025,.975))
+HDI_spS_discount <- quantile(sp_S_discount,c(.025,.975))
+
+
+library("cowplot")
+# model_plot_discount<- plot_grid(sp_discount, weight_discount, theta_discount, phy_delay, phy_amount, ncol = 5, align = "h", column_spacing = unit(c(1.5, 1.5, 1.5, 1.5), "cm"))
+# model_plot_discount
+# # Save the combined plot as a PNG file
+# ggsave("model_plot_discount.png", model_plot_discount, width=18, height=6)
+```
+
+### 3.4. Combined
+#### 3.4.1 Weight
+```{r}
+# effect of hunger 
+data_deltaweight <- data.frame(value = weight1_delta)
+HDI_weight <- quantile(weight1_delta,c(.025,.975))
+data_deltaweight$HDI <-HDI_weight
+data_deltaweight$task <-"Food"
+
+data_deltaweight_social <- data.frame(value = weight_social_delta)
+HDI_weight_social2 <- quantile(weight_social_delta,c(.025,.975))
+data_deltaweight_social$HDI <-HDI_weight_social2
+data_deltaweight_social$task <-"Social"
+
+data_deltaweight_discount <- data.frame(value = weight_discount_delta)
+HDI_weight_discount <- quantile(weight_discount_delta,c(.025,.975))
+data_deltaweight_discount$HDI <-HDI_weight_discount
+data_deltaweight_discount$task <-"Discount"
+
+plot_data_weight <- rbind(data_deltaweight, data_deltaweight_social, data_deltaweight_discount)
+
+
+library(ggdist)
+library(tidyverse)
+# Plot 
+weight_hs <- ggplot(plot_data_weight, aes(x = value, y = task, fill=task)) +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Relative Weight") +  # Change the x-axis label if needed
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits)+
+  geom_segment(data = plot_data_weight %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_weight %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_weight %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid") +
+  geom_point(data = plot_data_weight %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+    geom_point(data = plot_data_weight %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_weight %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+  theme(legend.position = "none") 
+
+weight_hs
+```
+
+
+#### 3.4.1 Theta
+```{r}
+# effect of hunger 
+data_deltatheta <- data.frame(value = theta_delta)
+HDI_theta <- quantile(theta_delta,c(.025,.975))
+data_deltatheta$HDI <-HDI_theta
+data_deltatheta$task <-"Food"
+
+data_deltatheta_social <- data.frame(value = theta_social_delta)
+HDI_theta_social2 <- quantile(theta_social_delta,c(.025,.975))
+data_deltatheta_social$HDI <-HDI_theta_social2
+data_deltatheta_social$task <-"Social"
+
+data_deltatheta_discount <- data.frame(value = theta_discount_delta)
+HDI_theta_discount2 <- quantile(theta_discount_delta,c(.025,.975))
+data_deltatheta_discount$HDI <-HDI_theta_discount2
+data_deltatheta_discount$task <-"Discount"
+
+plot_data_theta <- rbind(data_deltatheta, data_deltatheta_social, data_deltatheta_discount)
+
+library(ggdist)
+library(tidyverse)
+# Plot using ggplot2
+theta_hs <- ggplot(plot_data_theta, aes(x = value, y = task, fill=task)) + 
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Theta") +  # Change the y-axis label if needed
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits)+
+  geom_segment(data = plot_data_theta %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") + 
+  geom_segment(data = plot_data_theta %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid")+
+  geom_segment(data = plot_data_theta %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid")+
+
+  geom_point(data = plot_data_theta %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data_theta %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_theta %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) + 
+
+  theme(legend.position = "none") 
+
+theta_hs
+```
+
+
+#### 3.4.1 Phi 1
+```{r}
+# effect of hunger 
+data_deltaphy <- data.frame(value = phy_delta)
+HDI_phy <- quantile(phy_delta,c(.025,.975))
+data_deltaphy$HDI <-HDI_phy
+data_deltaphy$task <-"Food"
+
+data_deltaphy_social <- data.frame(value = phy_self_delta)
+HDI_phy_social <- quantile(phy_self_delta,c(.025,.975))
+data_deltaphy_social$HDI <-HDI_phy_social
+data_deltaphy_social$task <-"Social"
+
+data_deltaphy_discount <- data.frame(value = phy_delay_delta)
+HDI_phy_discount <- quantile(phy_delay_delta,c(.025,.975))
+data_deltaphy_discount$HDI <-HDI_phy_discount
+data_deltaphy_discount$task <-"Discount"
+
+
+plot_data <- rbind(data_deltaphy, data_deltaphy_social, data_deltaphy_discount)
+
+library(ggdist)
+library(tidyverse)
+# Plot using ggplot2
+phy4 <- ggplot(plot_data, aes(x = value, y = task, fill=task)) + 
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Phi Hot") +  # Change the y-axis label if needed
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits)+
+  geom_segment(data = plot_data %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") + 
+  geom_segment(data = plot_data %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid")+
+  geom_segment(data = plot_data %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid")+
+
+  geom_point(data = plot_data %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+
+  theme(legend.position = "none") 
+  
+
+phy4
+```
+
+
+#### 3.4.1 Phi 2
+```{r}
+# effect of hunger 
+data_deltaphy2 <- data.frame(value = phy2_delta)
+HDI_phy2 <- quantile(phy2_delta,c(.025,.975))
+data_deltaphy2$HDI <-HDI_phy2
+data_deltaphy2$task <-"Food"
+
+data_deltaphy_social2 <- data.frame(value = phy_ngo_delta)
+HDI_phy_social2 <- quantile(phy_ngo_delta,c(.025,.975))
+data_deltaphy_social2$HDI <-HDI_phy_social2
+data_deltaphy_social2$task <-"Social"
+
+data_deltaphy_discount2 <- data.frame(value = phy_amount_delta)
+HDI_phy_discount2 <- quantile(phy_amount_delta,c(.025,.975))
+data_deltaphy_discount2$HDI <-HDI_phy_discount2
+data_deltaphy_discount2$task <-"Discount"
+
+
+plot_data_phi2 <- rbind(data_deltaphy2, data_deltaphy_social2, data_deltaphy_discount2)
+
+library(ggdist)
+library(tidyverse)
+# Plot using ggplot2
+phy5 <- ggplot(plot_data_phi2, aes(x = value, y = task, fill=task)) + 
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Phi Cold") +  # Change the y-axis label if needed
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  scale_y_discrete(limits = c("Discount", "Social", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits)+
+  geom_segment(data = plot_data_phi2 %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") + 
+  geom_segment(data = plot_data_phi2 %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid")+
+  geom_segment(data = plot_data_phi2 %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid")+
+
+  geom_point(data = plot_data_phi2 %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data_phi2 %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_phi2 %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+
+  theme(legend.position = "none") 
+  
+
+phy5
+```
+
+
+#### 3.4.5 SP
+```{r}
+# effect of hunger 
+data_delta_sp <- data.frame(value = sp_delta)
+HDI_sp <- quantile(sp_delta,c(.025,.975))
+data_delta_sp$HDI <-HDI_sp
+data_delta_sp$task <-"Food"
+
+data_delta_sp_social <- data.frame(value = sp_social_delta)
+HDI_sp_social2 <- quantile(sp_social_delta,c(.025,.975))
+data_delta_sp_social$HDI <-HDI_sp_social2
+data_delta_sp_social$task <-"Social"
+
+data_delta_sp_discount <- data.frame(value = sp_discount_delta)
+HDI_sp_discount <- quantile(sp_discount_delta,c(.025,.975))
+data_delta_sp_discount$HDI <-HDI_sp_discount
+data_delta_sp_discount$task <-"Discount"
+
+plot_data_sp <- rbind(data_delta_sp, data_delta_sp_social, data_delta_sp_discount)
+
+
+library(ggdist)
+library(tidyverse)
+# Plot 
+sp_hs <- ggplot(plot_data_sp, aes(x = value, y = task, fill=task)) +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Starting Point") +  
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits2)+
+  geom_segment(data = plot_data_sp %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_sp %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_sp %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid") +
+
+  geom_point(data = plot_data_sp %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data_sp %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_sp %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+
+  theme(legend.position = "none") 
+
+sp_hs
+```
+
+```{r}
+
+# Add margins to each plot instead of using scale
+add_margins <- function(plot) {
+  plot + theme(plot.margin = margin(10, 10, 10, 10))  # top, right, bottom, left
+}
+
+# Apply to all plots
+plot_list <- list(sp_hs, weight_hs, theta_hs, phy4, phy5, 
+                  sp1, tasteweight1, theta1, phy1, phy3,
+                  sp_discount, weight_discount, theta_discount, phy_delay, phy_amount, 
+                  sp_social, weight_social, theta_social, phy_self, phy_ngo)
+
+plot_list <- lapply(plot_list, add_margins)
+
+model_plot_had <- plot_grid(plotlist = plot_list,
+                           ncol = 5, align = "hv", axis="tblr", byrow = TRUE,
+                           rel_widths = c(1, 1, 1, 1, 1), rel_heights = c(1, 1, 1, 1, 1), 
+                           labels = NULL, greedy = FALSE)
+
+ggsave("model_plot_HAD.png", model_plot_had, width=18, height=12, dpi=300, units="in")
+```
+
+
+
+```{r}
+
+# Add margins to each plot instead of using scale
+add_margins <- function(plot) {
+  plot + theme(plot.margin = margin(15, 15, 15, 15))  # top, right, bottom, left
+}
+
+# Apply to all plots
+plot_list <- list(sp_hs, sp1, sp_discount, sp_social,
+                  weight_hs, tasteweight1, weight_discount, weight_social, 
+                  theta_hs, theta1, theta_discount, theta_social, 
+                  phy4, phy1, phy_delay, phy_self,
+                  phy5, phy3, phy_amount, phy_ngo)
+
+plot_list <- lapply(plot_list, add_margins)
+
+model_plot_had <- plot_grid(plotlist = plot_list,
+                           ncol = 4, align = "hv", axis="tblr", byrow = TRUE,
+                           rel_widths = c(1, 1, 1, 1), rel_heights = c(1, 1, 1, 1, 1), 
+                           labels = c("a", "", "", "",
+                                      "b", "", "", "",
+                                      "c", "", "", "",
+                                      "d", "", "", "",
+                                      "e", "", "", ""),
+                           label_size = 18,
+                           label_fontface = "bold",
+                           hjust = 1,  # Adjust horizontal position
+                           vjust = 1.5)   # Adjust vertical position
+model_plot_had
+
+
+ggsave("model_plot_HAD2.png", model_plot_had, width=14, height=12, dpi=300, units="in")
+```
+
+### Supplement plot
+
+Food
+```{r}
+# 1) Scaling
+histGran <- (-300:300)/150
+# Create a data frame
+datascale <- data.frame(drift_S = drift_S, drift = drift_H)
+# Plot using ggplot2
+drift_food<-ggplot(datascale, aes(x = drift_S)) +
+  geom_histogram(binwidth = 1/170, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = drift_H), binwidth = 1/170, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Scaling", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_scale <- quantile(drift_delta,c(.025,.975))
+
+#4) Boundary seperation
+histGran <- (-300:300)/150
+# Create a data frame
+databound <- data.frame(boundSep_S_discount = boundSep_S_discount, boundSep_H_discount = boundSep_H_discount)
+# Plot using ggplot2
+bound_food<-ggplot(databound, aes(x = boundSep_S_discount)) +
+  geom_histogram(binwidth = 1/30, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = boundSep_H_discount), binwidth = 1/30, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Bound", y = "Frequency") +
+  scale_x_continuous(labels = digits)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  ylim(0, 5000)+
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_bound <- quantile(boundSep_delta,c(.025,.975))
+
+
+# 5) nDT
+histGran <- (-300:300)/150
+# Create a data frame
+datanDT <- data.frame(ndt_S = ndt_S, ndt_H = ndt_H)
+# Plot using ggplot2
+ndt_food<-ggplot(datanDT, aes(x = ndt_S)) +
+  geom_histogram(binwidth = 1/140, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = ndt_H), binwidth = 1/140, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "nDT", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme +
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_ndt <- quantile(ndt_delta,c(.025,.975))
+```
+
+
+Discount
+```{r}
+# 1) Scaling
+histGran <- (-300:300)/150
+# Create a data frame
+datascale <- data.frame(drift_S_discount = drift_S_discount, drift_H_discount = drift_H_discount)
+# Plot using ggplot2
+drift_discount<-ggplot(datascale, aes(x = drift_S_discount)) +
+  geom_histogram(binwidth = 1/170, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = drift_H_discount), binwidth = 1/170, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Scaling", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_scale_discount <- quantile(drift_delta_discount,c(.025,.975))
+
+
+#4) Boundary seperation
+histGran <- (-300:300)/150
+# Create a data frame
+databound <- data.frame(boundSep_S_discount = boundSep_S_discount, boundSep_H_discount = boundSep_H_discount)
+# Plot using ggplot2
+bound_discount<-ggplot(databound, aes(x = boundSep_S_discount)) +
+  geom_histogram(binwidth = 1/30, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = boundSep_H_discount), binwidth = 1/30, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Bound", y = "Frequency") +
+  #scale_x_continuous(limits = c(-0.1, 0.25)) 
+  scale_x_continuous(labels = digits)+
+  ylim(0, 5000)+
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_bound_discount <- quantile(boundSep_delta_discount,c(.025,.975))
+
+
+# 5) nDT
+histGran <- (-300:300)/150
+# Create a data frame
+datanDT <- data.frame(ndt_S_discount = ndt_S_discount, ndt_H_discount = ndt_H_discount)
+# Plot using ggplot2
+ndt_discount<-ggplot(datanDT, aes(x = ndt_S_discount)) +
+  geom_histogram(binwidth = 1/140, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = ndt_H_discount), binwidth = 1/140, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "nDT", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme +
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_ndt_discount <- quantile(ndt_delta_discount,c(.025,.975))
+
+```
+
+Social
+```{r}
+# 1) Scaling
+histGran <- (-300:300)/150
+# Create a data frame
+datascale <- data.frame(drift_S_social = drift_S_social, drift_H_social = drift_H_social)
+# Plot using ggplot2
+drift_social<-ggplot(datascale, aes(x = drift_S_social)) +
+  geom_histogram(binwidth = 1/170, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = drift_H_social), binwidth = 1/170, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Scaling", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  scale_x_continuous(labels = digits)+
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_scale_social <- quantile(drift_delta_social,c(.025,.975))
+
+
+#4) Boundary seperation
+histGran <- (-300:300)/150
+# Create a data frame
+databound <- data.frame(boundSep_S_social = boundSep_S_social, boundSep_H_social = boundSep_H_social)
+# Plot using ggplot2
+bound_social<-ggplot(databound, aes(x = boundSep_S_social)) +
+  geom_histogram(binwidth = 1/30, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = boundSep_H_social), binwidth = 1/30, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Bound", y = "Frequency") +
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  ylim(0, 5000)+
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_bound_social <- quantile(boundSep_delta_social,c(.025,.975))
+
+
+# 5) nDT
+histGran <- (-300:300)/150
+# Create a data frame
+datanDT <- data.frame(ndt_S_social = ndt_S_social, ndt_H_social = ndt_H_social)
+# Plot using ggplot2
+ndt_social<-ggplot(datanDT, aes(x = ndt_S_social)) +
+  geom_histogram(binwidth = 1/140, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = ndt_H_social), binwidth = 1/140, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "nDT", y = "Frequency") +
+  ylim(0, 5000)+
+  scale_x_continuous(labels = digits)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme +
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+HDI_ndt_social <- quantile(ndt_delta_social,c(.025,.975))
+
+```
+
+
+Effect of hunger 
+```{r}
+# effect of hunger 
+data_delta_drift <- data.frame(value = drift_delta)
+HDI_drift <- quantile(drift_delta,c(.025,.975))
+data_delta_drift$HDI <-HDI_drift
+data_delta_drift$task <-"Food"
+
+data_delta_drift_social <- data.frame(value = drift_delta_social)
+HDI_drift_social2 <- quantile(drift_delta_social,c(.025,.975))
+data_delta_drift_social$HDI <-HDI_drift_social2
+data_delta_drift_social$task <-"Social"
+
+data_delta_drift_discount <- data.frame(value = drift_delta_discount)
+HDI_drift_discount <- quantile(drift_delta_discount,c(.025,.975))
+data_delta_drift_discount$HDI <-HDI_drift_discount
+data_delta_drift_discount$task <-"Discount"
+
+plot_data_drift <- rbind(data_delta_drift, data_delta_drift_social, data_delta_drift_discount)
+
+
+library(ggdist)
+library(tidyverse)
+# Plot 
+drift_hs <- ggplot(plot_data_drift, aes(x = value, y = task, fill=task)) +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Scaling") +  
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits)+
+  geom_segment(data = plot_data_drift %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_drift %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_drift %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid") +
+
+  geom_point(data = plot_data_drift %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data_drift %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_drift %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+
+  theme(legend.position = "none",axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+drift_hs
+```
+
+```{r}
+# effect of hunger 
+data_delta_bound <- data.frame(value = boundSep_delta)
+HDI_bound <- quantile(boundSep_delta,c(.025,.975))
+data_delta_bound$HDI <-HDI_bound
+data_delta_bound$task <-"Food"
+
+data_delta_bound_social <- data.frame(value = boundSep_delta_social)
+HDI_bound_social2 <- quantile(boundSep_delta_social,c(.025,.975))
+data_delta_bound_social$HDI <-HDI_bound_social2
+data_delta_bound_social$task <-"Social"
+
+data_delta_bound_discount <- data.frame(value = boundSep_delta_discount)
+HDI_bound_discount <- quantile(boundSep_delta_discount,c(.025,.975))
+data_delta_bound_discount$HDI <-HDI_bound_discount
+data_delta_bound_discount$task <-"Discount"
+
+plot_data_bound <- rbind(data_delta_bound, data_delta_bound_social, data_delta_bound_discount)
+
+
+library(ggdist)
+library(tidyverse)
+# Plot 
+bound_hs <- ggplot(plot_data_bound, aes(x = value, y = task, fill=task)) +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "Bound") +  
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  scale_x_continuous(labels = digits)+
+  geom_segment(data = plot_data_bound %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_bound %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_bound %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid") +
+
+  geom_point(data = plot_data_bound %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data_bound %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_bound %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+
+  theme(legend.position = "none",axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+bound_hs
+```
+
+```{r}
+# effect of hunger 
+data_delta_ndt <- data.frame(value = ndt_delta)
+HDI_ndt <- quantile(ndt_delta,c(.025,.975))
+data_delta_ndt$HDI <-HDI_ndt
+data_delta_ndt$task <-"Food"
+
+data_delta_ndt_social <- data.frame(value = ndt_delta_social)
+HDI_ndt_social2 <- quantile(ndt_delta_social,c(.025,.975))
+data_delta_ndt_social$HDI <-HDI_ndt_social2
+data_delta_ndt_social$task <-"Social"
+
+data_delta_ndt_discount <- data.frame(value = ndt_delta_discount)
+HDI_ndt_discount <- quantile(ndt_delta_discount,c(.025,.975))
+data_delta_ndt_discount$HDI <-HDI_ndt_discount
+data_delta_ndt_discount$task <-"Discount"
+
+plot_data_ndt <- rbind(data_delta_ndt, data_delta_ndt_social, data_delta_ndt_discount)
+
+
+library(ggdist)
+library(tidyverse)
+# Plot 
+ndt_hs <- ggplot(plot_data_ndt, aes(x = value, y = task, fill=task)) +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid")+
+  labs(x = "Effect of Hunger", y = "nDT") +  
+  scale_fill_manual(values = c("Food" = "magenta", "Discount"="#00FFFF", "Social" = "orange")) +
+  scale_y_discrete(limits = c("Social", "Discount", "Food")) +
+  myTheme+
+  #scale_x_continuous(labels = digits2)+
+  geom_segment(data = plot_data_ndt %>% filter(task == "Food"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "magenta", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_ndt %>% filter(task == "Discount"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "#00FFFF", size = 1, linetype = "solid") +
+  geom_segment(data = plot_data_ndt %>% filter(task == "Social"),
+               aes(x = HDI[1], xend = HDI[2], y = task, yend = task),
+               color = "orange", size = 1, linetype = "solid") +
+
+  geom_point(data = plot_data_ndt %>% filter(task == "Food"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "magenta", size = 5) +
+  geom_point(data = plot_data_ndt %>% filter(task == "Discount"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "#00FFFF", size = 5) +
+  geom_point(data = plot_data_ndt %>% filter(task == "Social"),
+             aes(x = (HDI[1]+HDI[2])*.5, y = task), color = "orange", size = 5) +
+
+  theme(legend.position = "none",axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+ndt_hs
+```
+
+
+
+```{r}
+# Add margins to each plot instead of using scale
+add_margins <- function(plot) {
+  plot + theme(plot.margin = margin(10, 10, 10, 10))  # top, right, bottom, left
+}
+
+# Apply to all plots
+plot_list <- list(drift_hs, drift_food, drift_discount, drift_social,
+                  bound_hs, bound_food, bound_discount, bound_social, 
+                  ndt_hs, ndt_food, ndt_discount, ndt_social)
+
+plot_list <- lapply(plot_list, add_margins)
+
+model_plot_had <- plot_grid(plotlist = plot_list,
+                           ncol = 4, align = "hv", axis="tblr", byrow = TRUE,
+                           rel_widths = c(1, 1, 1, 1), rel_heights = c(1, 1, 1), 
+                           labels = c("a", "", "", "",
+                                      "b", "", "", "",
+                                      "c", "", "", ""),
+                           label_size = 12,
+                           label_fontface = "bold",
+                           hjust = 1,  # Adjust horizontal position
+                           vjust = 1.5)   # Adjust vertical position
+model_plot_had
+
+
+ggsave("model_plot_HAD_supp.png", model_plot_had, width=12, height=8, dpi=300, units="in")
+```
