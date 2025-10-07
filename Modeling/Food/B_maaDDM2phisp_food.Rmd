@@ -1,0 +1,692 @@
+---
+title: "maaDDM2phisp"
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
+date: "3/26/2024"
+output: html_document
+---
+
+# General Info
+
+This script contains all the models tested in our manuscript (https://osf.io/preprints/psyarxiv/wvfnb). It requires JAGS. The script is structured s follows:
+
+1. **Preparation:** loading libraries and load workspace
+2. **Multi-attribute attentional DDM with 2Phi with sp:** Function, Estimate maaDDM2phisp, Test Parameters and some graphs (corresponds to maaDDM2phisp)
+3. **Posterior Predictive Checks** for maaDDM2phisp with graph to check fit to data
+
+
+# 1 Preparations
+## 1.1 Load Libraries
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+#if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(rtdists)
+library(dfoptim)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library(tibble)
+library(readr)
+pacman::p_load(tidyverse, ez)
+#parallel computing stuff
+library(parallel)
+library(doParallel)
+library(foreach)
+numCores <- detectCores()
+registerDoParallel(cores=numCores)
+#JAGS packages
+library(R2jags) #should be put at the start but keep it here for the moment...
+library(rtdists) #to be on the safe side when loading workspace (and not executing the first chunk above)
+```
+
+## 1.2 Load workspace (if required)
+```{r}
+# Load data
+load("data_prep.RData")
+```
+
+
+# 2 maaDDM_sp_2w_2Phi
+## 2.1 Estimate maaDDM_sp_2Phi with hierarchical Bayesian modeling (JAGS)
+```{r}
+
+# get data and initial values together and specify the model
+ddmData <- list('N'=N,'S'=S,'P'=P,'H'=H,'tasteA'=tasteA,'tasteB'=tasteB,'healthA'=healthA,'healthB'=healthB,'RT'=RT,
+                'fixProp1'=fixProp1,'fixProp2'=fixProp2,'fixProp3'=fixProp3,'fixProp4'=fixProp4)
+
+#starting values
+nChains <- 8
+
+#parallel computing apparently not possible
+T1<-Sys.time()
+addmJAGS_sp_2Phi <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+                    parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                                           'mu_theta','sigma_theta','mu_phy','sigma_phy','mu_phy2','sigma_phy2','mu_sp','sigma_sp',
+                                           'mu_bound_H','sigma_bound_H','mu_ndt_H','sigma_ndt_H',
+                                           'mu_drift_H','sigma_drift_H','mu_weight1_H','sigma_weight1_H',
+                                           'mu_theta_H','sigma_theta_H','mu_phy_H','sigma_phy_H','mu_phy2_H','sigma_phy2_H','mu_sp_H','sigma_sp_H',
+                                           'bound','ndt','drift','weight1','theta','phy','phy2','sp',
+                                           'bound_H','ndt_H','drift_H','weight1_H','theta_H','phy_H','phy2_H','sp_H'),
+                    model.file = "BayesModel_maaDDM_sp_2Phi.txt",working.directory = 'BayesModels',
+                    n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, DIC = TRUE,jags.module = c("glm","dic","wiener"))
+T2<-Sys.time() #T2-T1
+
+# check convergence
+ddmRhats <- addmJAGS_sp_2Phi$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats)
+addmJAGS_sp_2Phi$BUGSoutput$DIC
+# save!
+
+```
+
+## 2.2 maaDDM_sp_2Phi: check parameters (group posteriors)
+```{r}
+#get group parameter estimates in transformed form
+boundSep_S <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound))
+boundSep_H <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound_H))
+boundSep_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_bound_H
+
+ndt_S <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt))
+ndt_H <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt_H))
+ndt_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_ndt_H
+
+drift_S <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift))
+drift_H <- log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift_H))
+drift_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_drift_H
+
+weight1_S <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1)
+weight1_H <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1_H)
+weight1_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_weight1_H
+
+sp_S <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp)
+sp_H <- pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp_H)
+sp_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_sp_H
+
+theta_S <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta)
+theta_H <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta_H)
+theta_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_theta_H
+
+phy_S <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy)
+phy_H <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy_H)
+phy_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy_H
+
+phy2_S <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2)
+phy2_H <- (addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2+addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2_H)
+phy2_delta <- addmJAGS_sp_2Phi$BUGSoutput$sims.list$mu_phy2_H
+
+
+# PLOT 
+
+#1) Weight 
+histGran <- (-300:300)/150
+# Create a data frame
+datatw <- data.frame(weight1_S = weight1_S, weight1_H = weight1_H)
+# Plot using ggplot2
+tasteweight1<-ggplot(datatw, aes(x = weight1_S)) +
+  geom_histogram(binwidth = 1/90, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = weight1_H), binwidth = 1/100, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Taste Weight", y = "Frequency") +
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  ylim(0, 5000)+
+  myTheme
+# effect of hunger 
+data_deltatw <- data.frame(weight1_delta = weight1_delta)
+HDI_tw <- quantile(weight1_delta,c(.025,.975))
+# Plot using ggplot2
+tasteweight2<-ggplot(data_deltatw, aes(x = weight1_delta)) +
+  geom_histogram(binwidth = 1/20, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_tw, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+HDI_ws <- quantile(weight1_S,c(.025,.975))
+HDI_wh <- quantile(weight1_H,c(.025,.975))
+
+# 2) Scaling
+histGran <- (-300:300)/150
+# Create a data frame
+datascale <- data.frame(drift_S = drift_S, drift_H = drift_H)
+# Plot using ggplot2
+drift1<-ggplot(datascale, aes(x = drift_S)) +
+  geom_histogram(binwidth = 1/170, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = drift_H), binwidth = 1/170, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Drift Scaling", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltascale <- data.frame(drift_delta = drift_delta)
+HDI_drift <- quantile(drift_delta,c(.025,.975))
+# Plot using ggplot2
+drift2<-ggplot(data_deltascale, aes(x = drift_delta)) +
+  geom_histogram(binwidth = 1/70, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_drift, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+# 3) Starting Point
+histGran <- (-300:300)/150
+# Create a data frame
+datasp <- data.frame(sp_S = sp_S, sp_H = sp_H)
+# Plot using ggplot2
+startpoint1<-ggplot(datasp, aes(x = sp_S)) +
+  geom_histogram(binwidth = 1/600, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = sp_H), binwidth = 1/600, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Starting point Bias", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+HDI_sps <- quantile(sp_S,c(.025,.975))
+HDI_sph <- quantile(sp_H,c(.025,.975))
+
+# effect of hunger 
+data_deltasp <- data.frame(sp_delta = sp_delta)
+HDI_sp <- quantile(sp_delta,c(.025,.975))
+# Plot using ggplot2
+startpoint2<-ggplot(data_deltasp, aes(x = sp_delta)) +
+  geom_histogram(binwidth = 1/250, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_sp, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+#4) Boundary seperation
+histGran <- (-300:300)/150
+# Create a data frame
+databound <- data.frame(boundSep_S = boundSep_S, boundSep_H = boundSep_H)
+# Plot using ggplot2
+bound1<-ggplot(databound, aes(x = boundSep_S)) +
+  geom_histogram(binwidth = 1/30, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = boundSep_H), binwidth = 1/30, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Boundary Seperation", y = "Frequency") +
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  ylim(0, 5000)+
+  myTheme
+# effect of hunger 
+data_deltabound <- data.frame(boundSep_delta = boundSep_delta)
+HDI_bound <- quantile(boundSep_delta,c(.025,.975))
+# Plot using ggplot2
+bound2<-ggplot(data_deltabound, aes(x = boundSep_delta)) +
+  geom_histogram(binwidth = 1/40, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_bound, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+# 5) nDT
+histGran <- (-300:300)/150
+# Create a data frame
+datanDT <- data.frame(ndt_S = ndt_S, ndt_H = ndt_H)
+# Plot using ggplot2
+nDT1<-ggplot(datanDT, aes(x = ndt_S)) +
+  geom_histogram(binwidth = 1/140, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = ndt_H), binwidth = 1/140, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Non-Decision Time", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltandt <- data.frame(ndt_delta = ndt_delta)
+HDI_ndt <- quantile(ndt_delta,c(.025,.975))
+# Plot using ggplot2
+nDT2<-ggplot(data_deltandt, aes(x = ndt_delta)) +
+  geom_histogram(binwidth = 1/110, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_ndt, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+
+# 6) Theta
+histGran <- (-300:300)/150
+# Create a data frame
+datatheta <- data.frame(theta_S = theta_S, theta_H = theta_H)
+# Plot using ggplot2
+theta1<-ggplot(datatheta, aes(x = theta_S)) +
+  geom_histogram(binwidth = 1/70, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = theta_H), binwidth = 1/70, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Theta", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltatheta <- data.frame(theta_delta = theta_delta)
+HDI_theta <- quantile(theta_delta,c(.025,.975))
+# Plot using ggplot2
+theta2<-ggplot(data_deltatheta, aes(x = theta_delta)) +
+  geom_histogram(binwidth = 1/70, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_theta, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+
+# 8) Phi 1 (taste)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy <- data.frame(phy_S = phy_S, phy_H = phy_H)
+# Plot using ggplot2
+phy1<-ggplot(dataphy, aes(x = phy_S)) +
+  geom_histogram(binwidth = 1/25, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phy_H), binwidth = 1/25, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Taste", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltaphy <- data.frame(phy_delta = phy_delta)
+HDI_phy <- quantile(phy_delta,c(.025,.975))
+# Plot using ggplot2
+phy2<-ggplot(data_deltaphy, aes(x = phy_delta)) +
+  geom_histogram(binwidth = 1/25, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_phy, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+# 7) Phi2 (health)
+histGran <- (-300:300)/150
+# Create a data frame
+dataphy2 <- data.frame(phy2_S = phy2_S, phy2_H = phy2_H)
+# Plot using ggplot2
+phy3<-ggplot(dataphy2, aes(x = phy2_S)) +
+  geom_histogram(binwidth = 1/15, fill = "cornflowerblue", alpha = 0.5, color = "black") +
+  geom_histogram(aes(x = phy2_H), binwidth = 1/15, fill = "gold", alpha = 0.5, color = "black") +
+  labs(x = "Phi Health", y = "Frequency") +
+  ylim(0, 5000)+
+  #scale_x_continuous(limits = c(-0.1, 0.25)) +
+  myTheme
+
+# effect of hunger 
+data_deltaphy2 <- data.frame(phy2_delta = phy2_delta)
+HDI_phy2 <- quantile(phy2_delta,c(.025,.975))
+# Plot using ggplot2
+phy4<-ggplot(data_deltaphy2, aes(x = phy2_delta)) +
+  geom_histogram(binwidth = 1/10, fill = "grey", alpha = 0.5, color = "black") +
+  geom_vline(xintercept = 0, color = "red", size = 1.5) +
+  geom_vline(xintercept = HDI_phy2, color = "black", size = 1, linetype = "dashed") +
+  ylim(0, 5000)+
+  labs(x = "Effect of Hunger", y = "Frequency") +
+  myTheme
+
+
+library("cowplot")
+# Arrange the plots side by side
+combined_plot_maaddm2phi2 <- plot_grid(tasteweight1, tasteweight2, drift1, drift2, nDT1, nDT2, bound1, bound2, startpoint1, startpoint2, theta1, theta2, phy1, phy2, phy3, phy4, labels = c("a", "", "b", "", "c", "", "d", "", "e", "", "f", "", "g", "", "h", ""), label_size = 20, ncol = 4, align = "h", column_spacing = unit(c(1, 3, 1, 1, 3, 1, 1, 3, 1,1,3,1), "cm"))
+combined_plot_maaddm2phi2
+# Save the combined plot as a PNG file
+ggsave("combined_plot_maaddm2phi2.png", combined_plot_maaddm2phi2, width = 16, height = 16)
+
+```
+
+
+# 3 Posterior predictive checks = simulate maaDDM_sp_2Phi
+## 3.1 Function
+```{r}
+#function for simulation (rtdists package is used to simulated the DDM)
+sim_addmJAGS_sp_2Phi  <- function(parameters,tasteA,tasteB,healthA,healthB,fixProps){
+  
+  #extract free parameters; note that order of parameters follows rtdists, not dwiener
+  boundarySeparation <- parameters[1]
+  ndt <- parameters[2]
+  drift <- parameters[3]
+  weight <- parameters[4]
+  theta <- parameters[5]
+  phiT <- parameters[6] #okay to call it "phi" in R
+  phiH <- parameters[7] #okay to call it "phi" in R
+  startingPoint <- parameters[8]*boundarySeparation #don't forget: sp is NOT relative in rtdists (but it is in dwiener; gosh!)
+  
+  #compute trial-wise value difference
+  valueDifference <- fixProps[,1]*(weight*(tasteA-theta*tasteB)+(1-weight)*phiH*(healthA-theta*healthB))+
+                     fixProps[,2]*(weight*(theta*tasteA-tasteB)+(1-weight)*phiH*(theta*healthA-healthB))+
+                     fixProps[,3]*(weight*phiT*(tasteA-theta*tasteB)+(1-weight)*(healthA-theta*healthB))+
+                     fixProps[,4]*(weight*phiT*(theta*tasteA-tasteB)+(1-weight)*(theta*healthA-healthB))
+
+  #Simulate the DDM and store choices and RTs
+  nTrials <- length(valueDifference)
+  choices <- rep(NA, nTrials)
+  rts <- rep(NA, nTrials)
+  for (i in 1:nTrials) {
+    result <- rdiffusion(1,boundarySeparation,drift*valueDifference[i],ndt,startingPoint)
+    
+    choices[i] <- ifelse(result$response == "upper", 2, 1)  
+    rts[i] <- result$rt
+  }
+  simdata<-cbind(choices, rts)
+
+    # Return the choices and RTs
+  return(simdata)
+}
+```
+
+## 3.2 Simulate
+```{r}
+#generate posterior predictives (loop over samples taken, subjects, conditions)
+nPostPred <- 1000
+ppSample <- sample(addmJAGS_sp_2Phi$BUGSoutput$n.sims,nPostPred) #draw samples from posterior (without replacement)
+ppDat_JAGS_hungry_choices <- matrix(NA,nrow = sum(H==1),ncol = nPostPred)
+ppDat_JAGS_sated_choices <- matrix(NA,nrow = sum(H==0),ncol = nPostPred)
+ppDat_JAGS_hungry_rts <- matrix(NA,nrow = sum(H==1),ncol = nPostPred)
+ppDat_JAGS_sated_rts <- matrix(NA,nrow = sum(H==0),ncol = nPostPred)
+conflictTrials_hungry = c()
+conflictTrials_sated = c()
+for (p in 1:nPostPred){
+  x = ppSample[p] #current sample
+  simDat_JAGS_hungry<-data.frame(choices = numeric(), rts = numeric())
+  simDat_JAGS_sated<-data.frame(choices = numeric(), rts = numeric())
+  for  (s in (unique(data_sated$subject))){
+    sInJAGS <- which(uID==s)
+    for (t in 1:2){
+      if (t == 1){ #session-specific stuff up front; note that order of parameters follows rtdists, not dwiener
+        sub <- data_hungry[data_hungry$subject == s, ] #hungry
+        fixatedElement <- expanded_table_h[[which(unique(data_hungry$subject)==s)]]
+        parameters <- c(log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$bound[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$bound_H[x,sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$ndt[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$ndt_H[x,sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$drift[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$drift_H[x,sInJAGS])),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$weight1[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$weight1_H[x,sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$sims.list$theta[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$theta_H[x,sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$sims.list$phy[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$phy_H[x,sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$sims.list$phy2[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$phy2_H[x,sInJAGS]),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$sp[x,sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$sims.list$sp_H[x,sInJAGS]))
+      } else {
+        sub <- data_sated[data_sated$subject == s, ] #sated
+        fixatedElement <- expanded_table_s[[which(unique(data_sated$subject)==s)]]
+        parameters <- c(log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$bound[x,sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$ndt[x,sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$sims.list$drift[x,sInJAGS])),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$weight1[x,sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$sims.list$theta[x,sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$sims.list$phy[x,sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$sims.list$phy2[x,sInJAGS]),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$sims.list$sp[x,sInJAGS]))
+      }
+
+      #arrange input data
+      tasteAi <- sub$taste_left
+      tasteBi <- sub$taste_right
+      healthAi <- sub$health_left
+      healthBi <- sub$health_right
+      ntrialsi <- nrow(sub)
+      fixProps <- matrix(nrow = ntrialsi,ncol = 4)
+      for (n in 1:ntrialsi){
+        fEn <- fixatedElement[1:round(sub$RT[n]),n] #stream of fixated elements in current trials
+        fixProps[n,] <- c(sum(na.omit(fEn==1)),sum(na.omit(fEn==2)),sum(na.omit(fEn==3)),sum(na.omit(fEn==4)))/sum(na.omit(fEn>=1))
+      }
+      #recode everything into tasty vs. healthy choice
+      tastyL <- (tasteAi>tasteBi) #whether tasty option was left
+      tasteAi <- sub$taste_left*(tastyL==T)+sub$taste_right*(tastyL==F)
+      tasteBi <- sub$taste_left*(tastyL==F)+sub$taste_right*(tastyL==T)
+      healthAi <- sub$health_left*(tastyL==T)+sub$health_right*(tastyL==F)
+      healthBi <- sub$health_left*(tastyL==F)+sub$health_right*(tastyL==T)
+      fixProps <- matrix(c(fixProps[,1]*(tastyL==T)+fixProps[,2]*(tastyL==F),fixProps[,1]*(tastyL==F)+fixProps[,2]*(tastyL==T),
+                     fixProps[,3]*(tastyL==T)+fixProps[,4]*(tastyL==F),fixProps[,3]*(tastyL==F)+fixProps[,4]*(tastyL==T)),ncol=4)
+      #rescale taste and health values to lie between 0 and 10 (as in Yang & Krajbich)
+      tasteAi <- tasteAi/10
+      tasteBi <- tasteBi/10
+      healthAi <- healthAi/10
+      healthBi <- healthBi/10
+      #take only trials with fixations
+      validTrials <- which((is.na(fixProps[,1])==0)|(is.na(fixProps[,2])==0)|(is.na(fixProps[,3])==0)|(is.na(fixProps[,4])==0))
+      tasteAi <- tasteAi[validTrials]
+      tasteBi <- tasteBi[validTrials]
+      healthAi <- healthAi[validTrials]
+      healthBi <- healthBi[validTrials]
+      fixProps <- fixProps[validTrials,]
+
+      #simulate
+      simDat <- sim_addmJAGS_sp_2Phi (parameters,tasteAi,tasteBi,healthAi,healthBi,fixProps)
+      if (t==1){
+        simDat_JAGS_hungry <- rbind(simDat_JAGS_hungry, simDat)
+        if (p==nPostPred){ #save trial info at the last iteration
+          conflictTrials <- ((tasteAi>tasteBi)&(healthAi<healthBi))|((tasteAi<tasteBi)&(healthAi>healthBi))
+          conflictTrials_hungry <- c(conflictTrials_hungry,conflictTrials)
+        }
+      } else {
+        simDat_JAGS_sated <- rbind(simDat_JAGS_sated, simDat)
+        if (p==nPostPred){ #save trial info at the last iteration
+          conflictTrials <- ((tasteAi>tasteBi)&(healthAi<healthBi))|((tasteAi<tasteBi)&(healthAi>healthBi))
+          conflictTrials_sated <- c(conflictTrials_sated,conflictTrials)
+        }
+      }
+    }
+  }
+  ppDat_JAGS_hungry_choices[,p] = simDat_JAGS_hungry$choices
+  ppDat_JAGS_hungry_rts[,p] = simDat_JAGS_hungry$rts
+  ppDat_JAGS_sated_choices[,p] = simDat_JAGS_sated$choices
+  ppDat_JAGS_sated_rts[,p] = simDat_JAGS_sated$rts
+  
+  flush.console()
+  msg = sprintf('Done with posterior predictive sample: %d',p)
+  print(msg)
+}
+
+save(ppDat_JAGS_hungry_choices, ppDat_JAGS_hungry_rts, ppDat_JAGS_sated_choices, ppDat_JAGS_sated_rts, file = "ppc_maaddm2phisp_food.RData")
+
+```
+
+
+
+```{r}
+load("ppc_maaddm2phisp_food.RData")
+#execute only once!
+max_sated <-mean(ppDat_JAGS_sated_rts)+4*(sd(ppDat_JAGS_sated_rts))
+max_hungry<-mean(ppDat_JAGS_hungry_rts)+4*(sd(ppDat_JAGS_hungry_rts))
+```
+
+```{r}
+# exclude too fast and slow responses (as done for the data)
+ppDat_JAGS_hungry_choices[ppDat_JAGS_hungry_rts>max_hungry] = NA
+ppDat_JAGS_hungry_choices[ppDat_JAGS_hungry_rts<.25] = NA
+ppDat_JAGS_hungry_rts[ppDat_JAGS_hungry_rts>max_hungry] = NA
+ppDat_JAGS_hungry_rts[ppDat_JAGS_hungry_rts<.25] = NA
+ppDat_JAGS_sated_choices[ppDat_JAGS_sated_rts>max_sated] = NA
+ppDat_JAGS_sated_choices[ppDat_JAGS_sated_rts<.25] = NA
+ppDat_JAGS_sated_rts[ppDat_JAGS_sated_rts>max_sated] = NA
+ppDat_JAGS_sated_rts[ppDat_JAGS_sated_rts<.25] = NA
+
+# prep data
+load("data_prep.RData")
+#a) hungry 
+data_hungry <- data_hungry %>%
+  mutate(choiceX = ifelse(
+    (taste_left > taste_right & response == 'left') | 
+    (taste_left < taste_right & response == 'right'),
+    "taste",
+    "health"
+  ))
+                    
+data_hungry<-data_hungry %>% 
+  dplyr::mutate(choice2=dplyr::recode(choiceX, 'taste'=2, 'health'=1))
+
+data_hungry$RT2<-data_hungry$RT/1000
+
+#a) sated
+data_sated <- data_sated %>%
+  mutate(choiceX = ifelse(
+    (taste_left > taste_right & response == 'left') | 
+    (taste_left < taste_right & response == 'right'),
+    "taste",
+    "health"
+  ))
+
+data_sated<-data_sated %>% 
+  dplyr::mutate(choice2=dplyr::recode(choiceX, 'taste'=2, 'health'=1))
+
+data_sated$RT2<-data_sated$RT/1000
+
+
+```
+
+
+```{r}
+library(HDInterval)
+# Convert matrices to dataframe
+sim_dataframe_hungry <- data.frame(
+  RT = as.vector(ppDat_JAGS_hungry_rts),
+  choice = as.vector(ppDat_JAGS_hungry_choices),
+  simulation = rep(1:ncol(ppDat_JAGS_hungry_rts), each = nrow(ppDat_JAGS_hungry_rts))
+)
+
+sim_dataframe_sated <- data.frame(
+  RT = as.vector(ppDat_JAGS_sated_rts),
+  choice = as.vector(ppDat_JAGS_sated_choices),
+  simulation = rep(1:ncol(ppDat_JAGS_sated_rts), each = nrow(ppDat_JAGS_sated_rts))
+)
+
+# Modified function to create plots without title
+plot_mirrored_histogram_ci <- function(observed_data, sim_dataframe, bins = 30, show_legend = TRUE) {
+  
+  # Process choice 2 (upper, positive)
+  obs_data_2 <- observed_data %>% 
+    filter(choice2 == 2, is.finite(RT2), RT2 > 0)
+  sim_data_2 <- sim_dataframe %>% 
+    filter(choice == 2, is.finite(RT), RT > 0)
+  
+  # Process choice 1 (lower, negative)
+  obs_data_1 <- observed_data %>% 
+    filter(choice2 == 1, is.finite(RT2), RT2 > 0)
+  sim_data_1 <- sim_dataframe %>% 
+    filter(choice == 1, is.finite(RT), RT > 0)
+  
+  # Create common bin edges
+  all_rt <- c(obs_data_2$RT2, obs_data_1$RT2, sim_data_2$RT, sim_data_1$RT)
+  rt_range <- range(all_rt, na.rm = TRUE)
+  bin_edges <- seq(rt_range[1], rt_range[2], length.out = bins + 1)
+  bin_centers <- (bin_edges[-1] + bin_edges[-length(bin_edges)]) / 2
+  
+  # Function to get CI for one choice
+  get_choice_ci <- function(obs_data, sim_data, flip = FALSE) {
+    # Observed histogram
+    obs_hist <- hist(obs_data, breaks = bin_edges, plot = FALSE)
+    
+    # CI calculation
+    ci_results <- data.frame()
+    for(i in 1:length(bin_centers)) {
+      bin_start <- bin_edges[i]
+      bin_end <- bin_edges[i + 1]
+      
+      sim_counts <- sim_data %>%
+        filter(RT >= bin_start & RT < bin_end) %>%
+        group_by(simulation) %>%
+        summarise(count = n(), .groups = 'drop')
+      
+      all_sims <- data.frame(simulation = 1:max(sim_data$simulation))
+      sim_counts <- merge(all_sims, sim_counts, all.x = TRUE)
+      sim_counts$count[is.na(sim_counts$count)] <- 0
+      
+      ci <- hdi(sim_counts$count, credMass = 0.95)
+      ci_results <- rbind(ci_results, data.frame(
+        bin_center = bin_centers[i],
+        observed = obs_hist$counts[i],
+        ci_lower = if(flip) -ci[2] else ci[1],
+        ci_upper = if(flip) -ci[1] else ci[2]
+      ))
+    }
+    
+    if(flip) {
+      ci_results$observed <- -ci_results$observed
+    }
+    
+    return(ci_results)
+  }
+  
+  # Get data for both choices
+  choice2_data <- get_choice_ci(obs_data_2$RT2, sim_data_2, flip = FALSE)
+  choice1_data <- get_choice_ci(obs_data_1$RT2, sim_data_1, flip = TRUE)
+  
+  # Create the plot
+  p <- ggplot() +
+    # Choice 2 (upper) - Tasty
+    geom_col(data = choice2_data,
+             aes(x = bin_center, y = observed, fill = "Tasty (data)"),
+             width = diff(bin_edges)[1] * 0.8,
+             color = "black", alpha = 0.7) +
+    geom_ribbon(data = choice2_data, 
+                aes(x = bin_center, ymin = ci_lower, ymax = ci_upper, fill = "95% CI (simulated)"), 
+                alpha = 0.9) +
+    
+    # Choice 1 (lower, flipped) - Healthy
+    geom_col(data = choice1_data,
+             aes(x = bin_center, y = observed, fill = "Healthy (data)"),
+             width = diff(bin_edges)[1] * 0.8,
+             color = "black", alpha = 0.7) +
+    geom_ribbon(data = choice1_data, 
+                aes(x = bin_center, ymin = ci_lower, ymax = ci_upper, fill = "95% CI (simulated)"), 
+                alpha = 0.9) +
+    
+    # Manual color scale for legend
+    scale_fill_manual(
+      name = "Choice",
+      values = c("Tasty (data)" = "darkgrey", 
+                 "Healthy (data)" = "white", 
+                 "95% CI (simulated)" = "magenta"),
+      breaks = c("Tasty (data)", "Healthy (data)", "95% CI (simulated)")
+    ) +
+
+    
+    # Styling
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+    labs(
+      x = "Response Time (s)", 
+      y = "Frequency"
+    ) +
+    myTheme +
+    xlim(0, 10) +
+    #coord_cartesian(ylim = c(-2400, 550))+
+    # Make y-axis labels show absolute values (positive)
+    scale_y_continuous(labels = abs) 
+    
+
+    
+  # Control legend display
+  if (!show_legend) {
+    p <- p + theme(legend.position = "none")
+  }
+  
+  return(p)
+}
+
+# Create individual plots with colored frames (excluding legend area)
+plot_a <- plot_mirrored_histogram_ci(data_hungry, sim_dataframe_hungry, bins = 80, show_legend = TRUE) +
+  ggtitle("a) Hungry") +
+  theme(panel.background = element_rect(color = "gold", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+plot_b <- plot_mirrored_histogram_ci(data_sated, sim_dataframe_sated, bins = 80, show_legend = TRUE) +
+  ggtitle("b) Sated") +
+  theme(panel.background = element_rect(color = "cornflowerblue", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+# Combine plots using patchwork with shared legend at bottom and more space
+library(patchwork)
+combined_plot <- (plot_a | plot_b) + 
+                 plot_layout(guides = "collect") &
+                 theme(legend.position = "bottom")
+
+
+
+# Print the combined plot
+print(combined_plot)
+
+ggsave("ppc_food.png", combined_plot, width = 12, height = 7)
+```

@@ -1,0 +1,252 @@
+---
+title: "Preprocess Modeling"
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
+date: "3/26/2024"
+output: html_document
+---
+
+# General Info
+This script contains loading data and preprocessing it for all modeling analyses. Crucially (and different to preprocesing in the behavioural analyses), we change the format of fixations in 2.3 and set some parameters in 2.4. this results in data_prep.RData
+
+### 1 Preperations
+#### 1.1 Load Data
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+load("food_modeling_data.RData")
+#load("food_data.RData")
+
+data_hungry<-data_hungry_neu
+data_sated<-data_sated_neu
+## check how much trials --> also more trials on average and smaller SD
+trial<- data_sated %>%
+  group_by(subject)%>%
+  summarise(trialnr=length(unique((trial))))
+mean(trial$trialnr)
+
+```
+
+
+## 2.3 Get fixations in correct format
+### 2.3.1 hungry
+```{r}
+library(tidyr)
+library(dplyr)
+
+expanded_table_h <- vector("list", length(unique(data_hungry_long$subject)))
+
+for (s in unique(data_hungry_long$subject)) {
+  testsub <- data_hungry_long[data_hungry_long$subject == s, ]
+
+  fixatedElement <- testsub[c("trial", "fixElement", "fixdur")]
+
+  fixatedElement$totaldur <- fixatedElement$fixdur
+  for (i in 2:nrow(fixatedElement)) {
+    if (fixatedElement$trial[i] == fixatedElement$trial[i-1]) {
+      fixatedElement$totaldur[i] <- fixatedElement$fixdur[i] + fixatedElement$totaldur[i-1]
+    }
+  }
+
+  fixtab <- fixatedElement[c("trial", "fixElement", "totaldur")]
+
+  expanded_table_h[[s]] <- fixtab %>%
+    group_by(trial) %>%
+    fill(fixElement) %>%
+    mutate(totaldur = lag(totaldur, default = 0) + 1) %>%
+    fill(fixElement) %>%
+    complete(totaldur = 1:10000) %>%
+    fill(fixElement, .direction = "down") %>%
+    ungroup()
+
+  # Pivot the table to match the desired structure
+  expanded_table_h[[s]] <- pivot_wider(expanded_table_h[[s]], names_from = trial, values_from = fixElement)
+  expanded_table_h[[s]] <- expanded_table_h[[s]] %>%
+    dplyr::select(-1)
+}
+# Filter out empty tables from the list
+expanded_table_h <- expanded_table_h[sapply(expanded_table_h, length) > 0]
+
+```
+
+### 2.3.2 sated
+```{r}
+expanded_table_s <- vector("list", length(unique(data_sated_long$subject)))
+
+for (s in unique(data_sated_long$subject)) {
+  testsub <- data_sated_long[data_sated_long$subject == s, ]
+
+  fixatedElement <- testsub[c("trial", "fixElement", "fixdur")]
+
+  fixatedElement$totaldur <- fixatedElement$fixdur
+  for (i in 2:nrow(fixatedElement)) {
+    if (fixatedElement$trial[i] == fixatedElement$trial[i-1]) {
+      fixatedElement$totaldur[i] <- fixatedElement$fixdur[i] + fixatedElement$totaldur[i-1]
+    }
+  }
+
+  fixtab <- fixatedElement[c("trial", "fixElement", "totaldur")]
+
+  expanded_table_s[[s]] <- fixtab %>%
+    group_by(trial) %>%
+    fill(fixElement) %>%
+    mutate(totaldur = lag(totaldur, default = 0) + 1) %>%
+    fill(fixElement) %>%
+    complete(totaldur = 1:10000) %>%
+    fill(fixElement, .direction = "down") %>%
+    ungroup()
+
+  # Pivot the table to match the desired structure
+  expanded_table_s[[s]] <- pivot_wider(expanded_table_s[[s]], names_from = trial, values_from = fixElement)
+  expanded_table_s[[s]] <- expanded_table_s[[s]] %>%
+    dplyr::select(-1)
+}
+# Filter out empty tables from the list
+expanded_table_s <- expanded_table_s[sapply(expanded_table_s, length) > 0]
+
+```
+
+## 2.4 Set some parameters
+```{r}
+#loop over subjects for individual fits
+nFits <- 10 #number of attempts to fit per subject
+nsubj<- max(unique(data_hungry$subject)) #doesn't matter whether taking hungry or sated 
+ntrials<-190
+dt <- 1/1000
+paramNames <- c('boundarySeparation','driftScaling','ndt','weight','theta','phi')
+nParams <- length(paramNames)
+bestDevianceH <- rep(-2*ntrials*log(1e-5),nsubj) #start with a very high deviance)
+allDeviancesH <- data.frame(matrix(bestDevianceH[1],nrow = nsubj,ncol = nFits))
+bestParametersH <- data.frame(matrix(nrow = nsubj,ncol = nParams))
+colnames(bestParametersH) <- paramNames
+allParametersH <- array(NA,c(nFits,nParams,nsubj))
+bestDevianceS <- bestDevianceH
+allDeviancesS <- allDeviancesH
+bestParametersS <- bestParametersH
+allParametersS <- allParametersH
+
+```
+
+
+# 3 hierarchical Bayesian modeling (JAGS) - preparation
+```{r}
+#loop over subjects to get the data and arrange it in the order needed
+uID <- unique(data_hungry$subject)
+#Taste - Health data
+tasteA <- c()
+tasteB <- c()
+healthA <- c()
+healthB <- c()
+nutriA <- c()
+nutriB <- c()
+
+fixProp1 <- c()
+fixProp2 <- c()
+fixProp3 <- c()
+fixProp4 <- c()
+RT <- c()
+
+H <- c() #whether trial is hungry (1) or sated (0)
+P <- c() #participant number (from 1 till nsubj, so 1, 2, 3, 4, ..., nsubj)
+
+blubb <- matrix(NA,nrow=max(uID),ncol=2)
+
+
+for (s in (unique(data_hungry$subject))){
+  
+  #loop over sessions (1 = hungry)
+  for (t in 1:2){
+    if (t == 1){ #session-specific stuff up front
+      sub <- data_hungry[data_hungry$subject == s, ] #hungry
+      fixatedElement <- expanded_table_h[[which(unique(data_hungry$subject)==s)]]
+    } else {
+      sub <- data_sated[data_sated$subject == s, ] #sated
+      fixatedElement <- expanded_table_s[[which(unique(data_sated$subject)==s)]]
+    }
+    
+    #rearrange input data for Taste -Health Choice
+    tasteL <- (sub$taste_left>sub$taste_right) #whether tasty option was left
+    response <- sub$response
+    response <- as.numeric(((response==("left"))&(tasteL==T))|((response==("right"))&(tasteL==F)))
+    rt_s <- sub$RT*dt
+    rt_s[response==0] = -rt_s[response==0] #dwiener function in JAGS wants "negative" rt if choice == 0
+
+    tasteA_s <- sub$mean_taste_left*(tasteL==T)+sub$mean_taste_right*(tasteL==F)
+    tasteB_s <- sub$mean_taste_left*(tasteL==F)+sub$mean_taste_right*(tasteL==T)
+    healthA_s <- sub$mean_health_left*(tasteL==T)+sub$mean_health_right*(tasteL==F)
+    healthB_s <- sub$mean_health_left*(tasteL==F)+sub$mean_health_right*(tasteL==T)
+    nutriA_s <- sub$nutri_left2*(tasteL==T)+sub$nutri_right2*(tasteL==F)
+    nutriB_s <- sub$nutri_left2*(tasteL==F)+sub$nutri_right2*(tasteL==T)
+
+    
+    #prepare fixation data Taste - Health
+    ntrialsi <- nrow(sub)
+    fixProps <- matrix(nrow = ntrialsi,ncol = 4)
+    for (n in 1:ntrialsi){
+      fEn <- fixatedElement[1:round(sub$RT[n]),n] #stream of fixated elements in current trials
+      fixProps[n,] <- c(sum(na.omit(fEn==1)),sum(na.omit(fEn==2)),sum(na.omit(fEn==3)),sum(na.omit(fEn==4)))/sum(na.omit(fEn>=1))
+    }
+    fixProps <- matrix(c(fixProps[,1]*(tasteL==T)+fixProps[,2]*(tasteL==F),fixProps[,1]*(tasteL==F)+fixProps[,2]*(tasteL==T),
+                   fixProps[,3]*(tasteL==T)+fixProps[,4]*(tasteL==F),fixProps[,3]*(tasteL==F)+fixProps[,4]*(tasteL==T)),ncol=4)
+
+    
+    #fill in "all-subject" vectors for Taste Health
+    tasteA <- c(tasteA,tasteA_s)
+    tasteB <- c(tasteB,tasteB_s)
+    healthA <- c(healthA,healthA_s)
+    healthB <- c(healthB,healthB_s)
+    nutriA <- c(nutriA,nutriA_s)
+    nutriB <- c(nutriB,nutriB_s)
+    fixProp1 <- c(fixProp1,fixProps[,1])
+    fixProp2 <- c(fixProp2,fixProps[,2])
+    fixProp3 <- c(fixProp3,fixProps[,3])
+    fixProp4 <- c(fixProp4,fixProps[,4])
+    RT <- c(RT,rt_s)
+    H <- c(H,rep(t==1,length(rt_s)))
+    P <- c(P,rep(which(uID==s),length(rt_s)))
+    
+    bla=cor.test(as.numeric(fixProps[,1]-fixProps[,2]+fixProps[,3]-fixProps[,4]),as.numeric(rt_s>0))
+    blubb[s,t]=bla$estimate
+
+    
+  }
+}
+
+
+#rescale taste and nutri values to lie between 1 and 10 (as in Yang & Krajbich), in line with Berkowitsch et al. 2015
+tasteA <- (1+((tasteA-min(tasteA))*(10-1))/(max(tasteA)-min(tasteA))) #double-check Berkowitsch et al 2015
+tasteB <- (1+((tasteB-min(tasteB))*(10-1))/(max(tasteB)-min(tasteB)))
+healthA <- (1+((healthA-min(healthA))*(10-1))/(max(healthA)-min(healthA)))
+healthB <- (1+((healthB-min(healthB))*(10-1))/(max(healthB)-min(healthB)))
+nutriA <- (1+((nutriA-min(nutriA))*(10-1))/(max(nutriA)-min(nutriA)))
+nutriB <- (1+((nutriB-min(nutriB))*(10-1))/(max(nutriB)-min(nutriB)))
+
+#take only trials with fixations
+validT <- which((is.na(fixProp1)==0)|(is.na(fixProp2)==0)|(is.na(fixProp3)==0)|(is.na(fixProp4)==0))
+tasteA <- tasteA[validT]
+tasteB <- tasteB[validT]
+healthA <- healthA[validT]
+healthB <- healthB[validT]
+nutriA <- nutriA[validT]
+nutriB <- nutriB[validT]
+fixProp1 <- fixProp1[validT]
+fixProp2 <- fixProp2[validT]
+fixProp3 <- fixProp3[validT]
+fixProp4 <- fixProp4[validT]
+RT <- RT[validT]
+H <- H[validT]
+P <- P[validT]
+N <- length(RT)
+S <- length(unique(data_hungry$subject))
+
+```
+
+```{r}
+save.image('data_prep.RData')
+```
+
+
+
