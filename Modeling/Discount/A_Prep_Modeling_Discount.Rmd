@@ -1,0 +1,128 @@
+---
+title: "Prep Discount Model"
+output: html_document
+date: "2024-10-09"
+---
+
+# General Info
+This script contains loading data and preprocessing it for all modeling analyses. Crucially (and different to preprocesing in the behavioural analyses), we change the format of fixations in 2.3 and set some parameters in 3 this results in data_prep.RData
+
+
+# 1 Preperations
+## 1.1 Load Data
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+load("discount_modeling_data.RData")
+
+```
+
+## 2 Convert Data
+to get it in the correct format for modelling
+```{r}
+#loop over subjects to get the data and arrange it in the order needed
+uID <- unique(data_discount_hungry$subject)
+#value - time data
+valueA <- c()
+valueB <- c()
+timeA2 <- c()
+timeB2 <- c()
+
+fixProp1 <- c()
+fixProp2 <- c()
+fixProp3 <- c()
+fixProp4 <- c()
+RT <- c()
+
+H <- c() #whether trial is hungry (1) or sated (0)
+P <- c() #participant number (from 1 till nsubj, so 1, 2, 3, 4, ..., nsubj)
+
+dt <- 1/1000
+maxtime<-max(data_discount_hungry$time_left)
+data_discount_hungry$time_left2<-maxtime-data_discount_hungry$time_left 
+data_discount_hungry$time_right2<-maxtime-data_discount_hungry$time_right     
+data_discount_sated$time_left2<-maxtime-data_discount_sated$time_left 
+data_discount_sated$time_right2<-maxtime-data_discount_sated$time_right     
+
+for (s in (unique(data_discount_hungry$subject))){
+  
+  #loop over sessions (1 = hungry)
+  for (t in 1:2){
+    if (t == 1){ #session-specific stuff up front
+      sub <- data_discount_hungry[data_discount_hungry$subject == s, ] #hungry
+      #fixatedElement <- expanded_table_h[[which(unique(data_discount_hungry$subject)==s)]]
+    } else {
+      sub <- data_discount_sated[data_discount_sated$subject == s, ] #sated
+      #fixatedElement <- expanded_table_s[[which(unique(data_discount_sated$subject)==s)]]
+    }
+    
+    #recode choice impatient left
+    delayL <- (sub$time_left2>sub$time_right2) #whether impatient choice (larger recoded delay) was left
+    response <- sub$response
+    response <- as.numeric(((response==("left"))&(delayL==T))|((response==("right"))&(delayL==F)))
+    rt_s <- sub$RT*dt
+    rt_s[response==0] = -rt_s[response==0] #dwiener function in JAGS wants "negative" rt if choice == 0
+
+    valueA_s <- sub$value_left*(delayL==T)+sub$value_right*(delayL==F)
+    valueB_s <- sub$value_left*(delayL==F)+sub$value_right*(delayL==T)
+    timeA_s <- sub$time_left2*(delayL==T)+sub$time_right2*(delayL==F)
+    timeB_s <- sub$time_left2*(delayL==F)+sub$time_right2*(delayL==T)
+
+    fixProp1_s <- sub$delayleft_time/(sub$delayleft_time+sub$delayright_time+sub$amountleft_time+sub$amountright_time) #delay left
+    fixProp2_s <- sub$delayright_time/(sub$delayleft_time+sub$delayright_time+sub$amountleft_time+sub$amountright_time)#delay right
+    fixProp3_s <- sub$amountleft_time/(sub$delayleft_time+sub$delayright_time+sub$amountleft_time+sub$amountright_time)#amount left
+    fixProp4_s <- sub$amountright_time/(sub$delayleft_time+sub$delayright_time+sub$amountleft_time+sub$amountright_time)#amount right
+    
+    fixProps <- matrix(c(fixProp1_s*(delayL==T)+fixProp2_s*(delayL==F),fixProp1_s*(delayL==F)+fixProp2_s*(delayL==T),
+                   fixProp3_s*(delayL==T)+fixProp4_s*(delayL==F),fixProp3_s*(delayL==F)+fixProp4_s*(delayL==T)),ncol=4)
+
+    
+    #fill in "all-subject" vectors for value time
+    valueA <- c(valueA,valueA_s)
+    valueB <- c(valueB,valueB_s)
+    timeA2 <- c(timeA2,timeA_s)
+    timeB2 <- c(timeB2,timeB_s)
+
+    fixProp1 <- c(fixProp1,fixProps[,1])
+    fixProp2 <- c(fixProp2,fixProps[,2])
+    fixProp3 <- c(fixProp3,fixProps[,3])
+    fixProp4 <- c(fixProp4,fixProps[,4])
+    
+    RT <- c(RT,rt_s)
+    H <- c(H,rep(t==1,length(rt_s)))
+    P <- c(P,rep(which(uID==s),length(rt_s)))
+
+  }
+}
+
+#rescale amount and delay values to lie between 1 and 10 (as in Yang & Krajbich), in line with Berkowitsch et al. 2015
+valueA <- (1+((valueA-min(valueA))*(10-1))/(max(valueA)-min(valueA))) 
+valueB <- (1+((valueB-min(valueB))*(10-1))/(max(valueB)-min(valueB)))
+timeA2 <- (1+((timeA2-min(timeA2))*(10-1))/(max(timeA2)-min(timeA2)))
+timeB2 <- (1+((timeB2-min(timeB2))*(10-1))/(max(timeB2)-min(timeB2)))
+
+#take only trials with fixations
+validT <- which((is.na(fixProp1)==0)|(is.na(fixProp2)==0)|(is.na(fixProp3)==0)|(is.na(fixProp4)==0))
+valueA <- valueA[validT]
+valueB <- valueB[validT]
+timeA2 <- timeA2[validT]
+timeB2 <- timeB2[validT]
+fixProp1 <- fixProp1[validT]
+fixProp2 <- fixProp2[validT]
+fixProp3 <- fixProp3[validT]
+fixProp4 <- fixProp4[validT]
+RT <- RT[validT]
+H <- H[validT]
+P <- P[validT]
+N <- length(RT)
+S <- length(unique(data_discount_hungry$subject))
+```
+
+save
+```{r}
+save.image('data_discount_prep.RData')
+```
