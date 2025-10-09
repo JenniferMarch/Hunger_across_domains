@@ -626,9 +626,9 @@ plot_mirrored_histogram_ci <- function(observed_data, sim_dataframe, bins = 30, 
   
   # Create the plot
   p <- ggplot() +
-    # Choice 2 (upper) - Selfish
+    # Choice 2 (upper) - Impatient
     geom_col(data = choice2_data,
-             aes(x = bin_center, y = observed, fill = "Selfish (data)"),
+             aes(x = bin_center, y = observed, fill = "Impatient (data)"),
              width = diff(bin_edges)[1] * 0.8,
              color = "black", alpha = 0.7) +
     geom_ribbon(data = choice2_data, 
@@ -637,7 +637,7 @@ plot_mirrored_histogram_ci <- function(observed_data, sim_dataframe, bins = 30, 
     
     # Choice 1 (lower, flipped) - Prosocial
     geom_col(data = choice1_data,
-             aes(x = bin_center, y = observed, fill = "Prosocial (data)"),
+             aes(x = bin_center, y = observed, fill = "Patient (data)"),
              width = diff(bin_edges)[1] * 0.8,
              color = "black", alpha = 0.7) +
     geom_ribbon(data = choice1_data, 
@@ -647,10 +647,10 @@ plot_mirrored_histogram_ci <- function(observed_data, sim_dataframe, bins = 30, 
     # Manual color scale for legend
     scale_fill_manual(
       name = "Choice",
-      values = c("Selfish (data)" = "darkgrey", 
-                 "Prosocial (data)" = "white", 
+      values = c("Impatient (data)" = "darkgrey", 
+                 "Patient (data)" = "white", 
                  "95% CI (simulated)" = "turquoise"),
-      breaks = c("Selfish (data)", "Prosocial (data)", "95% CI (simulated)")
+      breaks = c("Impatient (data)", "Patient (data)", "95% CI (simulated)")
     ) +
 
     
