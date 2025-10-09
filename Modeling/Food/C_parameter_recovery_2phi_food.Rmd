@@ -1,0 +1,542 @@
+---
+title: "Parameter Recovery maaDDM+sp"
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
+date: "2024-01-10"
+output: html_document
+---
+# General Info
+
+This script contains the parameter recovery of the Multi-attribute attentional DDM with stating point bias of our manuscript "Domain Specific Effects of Hunger on Attention and Choice". It requires JAGS and the dwiener module. The script is structured s follows:
+1. **Preparation:** loading libraries and creating theme for figure and possibility to load our workspace
+2. **Set-up Parameter Recovery:** simulate data with parameters 
+3. **Fit simulated data:** to check if similar parameters are yielded and correlate recovered with true parameters
+4. **Plot** and calculate corrleations of true and recovered parameters
+
+
+# 1 Preparations
+## 1.1 Load libraries
+```{r}
+#clear working environment
+rm(list=ls())
+
+#clear all plots
+if(!is.null(dev.list())) dev.off()
+
+#load required libraries
+library(rtdists)
+library(dfoptim)
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library(tibble)
+library(readr)
+pacman::p_load(tidyverse, ez)
+#parallel computing stuff
+library(parallel)
+library(doParallel)
+library(foreach)
+numCores <- detectCores()
+registerDoParallel(cores=numCores)
+#JAGS packages
+library(R2jags) #should be put at the start but keep it here for the moment...
+library(rtdists) #to be on the safe side when loading workspace (and not executing the first chunk above)
+```
+
+## 1.2 Create Theme for Plots
+```{r}
+myTheme <- theme(
+  axis.line = element_line(colour = "black"), # Hauptachsenfarbe schwarz
+  panel.grid.major = element_blank(),  # Hauptgitterlinien entfernen
+  panel.grid.minor = element_blank(),  # Untergitterlinien entfernen
+  panel.border = element_blank(),      # Rahmen entfernen
+  panel.background = element_blank(),  # Hintergrund leer, d.h. weiß
+  text=element_text(size=14, colour = "black"), # allg. Schriftgröße definieren
+  axis.title.x = element_text(size=14, face="bold", colour = "black"), 
+  axis.title.y = element_text( size=14, face="bold", colour = "black"),
+  axis.text = element_text(size=12),
+  strip.text =  element_text( size=12),
+  strip.background = element_rect(fill = "white", colour = "black"),
+  legend.background = element_rect(colour = "black"), # Rahmen um Legende
+  legend.key = element_blank(),
+  legend.key.size = unit(3, "lines"))
+```
+
+## 1.3 Load workspace (if required)
+```{r}
+# Load workspace
+load("maaDDM2phisp_food.RData")
+```
+
+# 2 Set-Up: parameter Recovery 2Phi Model
+**Goal:** Simulated data would yield the same parameters
+**How:**Draw samples from distribution
+```{r}
+#function for simulation (this is just copy-pasted from below with minor changes; so, rtdists package is used to simulated the DDM)
+pr_sim_addmJAGS_sp_2Phi <- function(parameters,attribute1A,attribute1B,attribute2A,attribute2B,subject,fixProps){
+  
+  #extract free parameters; note that order of parameters follows rtdists, not dwiener
+  boundarySeparation <- parameters[1]
+  ndt <- parameters[2]
+  drift <- parameters[3]
+  weight <- parameters[4]
+  theta <- parameters[5]
+  phi1 <- parameters[6] 
+  phi2 <- parameters[7] 
+  startingPoint <- parameters[8]*boundarySeparation #don't forget: sp is NOT relative in rtdists (but it is in dwiener)
+  
+  #compute trial-wise value difference
+  valueDifference <- fixProps[,1]*(weight*(attribute1A-theta*attribute1B)+(1-weight)*phi2*(attribute2A-theta*attribute2B))+
+                     fixProps[,2]*(weight*(theta*attribute1A-attribute1B)+(1-weight)*phi2*(theta*attribute2A-attribute2B))+
+                     fixProps[,3]*(weight*phi1*(attribute1A-theta*attribute1B)+(1-weight)*(attribute2A-theta*attribute2B))+
+                     fixProps[,4]*(weight*phi1*(theta*attribute1A-attribute1B)+(1-weight)*(theta*attribute2A-attribute2B))
+
+  #Simulate the DDM and store choices and RTs
+  nTrials <- length(valueDifference)
+  choices <- rep(NA, nTrials)
+  rts <- rep(NA, nTrials)
+  for (i in 1:nTrials) {
+    result <- rdiffusion(1,boundarySeparation,drift*valueDifference[i],ndt,startingPoint)
+    
+    choices[i] <- ifelse(result$response == "upper", 2, 1)  
+    rts[i] <- result$rt
+  }
+  pr_data_2phi<-cbind(subject, choices, rts, attribute1A, attribute1B, attribute2A, attribute2B, fixProps)
+
+    # Return the choices and RTs
+  return(pr_data_2phi)
+}
+
+#generate posterior predictives (loop over samples taken, subjects, conditions)
+nParamRecov <- 1 
+ppSample <- sample(addmJAGS_sp_2Phi$BUGSoutput$n.sims,nPostPred) #draw samples from posterior (without replacement)
+ppDat_JAGS_hungry_choices <- matrix(NA,nrow = sum(H==1),ncol = nPostPred)
+ppDat_JAGS_sated_choices <- matrix(NA,nrow = sum(H==0),ncol = nPostPred)
+ppDat_JAGS_hungry_rts <- matrix(NA,nrow = sum(H==1),ncol = nPostPred)
+ppDat_JAGS_sated_rts <- matrix(NA,nrow = sum(H==0),ncol = nPostPred)
+conflictTrials_hungry = c()
+conflictTrials_sated = c()
+for (p in 1:nPostPred){
+  x = ppSample[p] #current sample
+  simDat_JAGS_hungry<-data.frame(choices = numeric(), rts = numeric())
+  simDat_JAGS_sated<-data.frame(choices = numeric(), rts = numeric())
+  for  (s in (unique(data_sated$subject))){
+    sInJAGS <- which(uID==s)
+    for (t in 1:2){
+      if (t == 1){ #session-specific stuff up front; note that order of parameters follows rtdists, not dwiener
+        sub <- data_hungry[data_hungry$subject == s, ] #hungry
+        parameters <- c(log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$bound[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$bound_H[sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$ndt[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$ndt_H[sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$drift[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$drift_H[sInJAGS])),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$weight1[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$weight1_H[sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$mean$theta[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$theta_H[sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$mean$phy[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$phy_H[sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$mean$phy2[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$phy2_H[sInJAGS]),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$sp[sInJAGS]+addmJAGS_sp_2Phi$BUGSoutput$mean$sp_H[sInJAGS]))
+      } else {
+        sub <- data_sated[data_sated$subject == s, ] #sated
+        parameters <- c(log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$bound[sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$ndt[sInJAGS])),
+                      log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$drift[sInJAGS])),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$weight1[sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$mean$theta[sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$mean$phy[sInJAGS]),
+                      (addmJAGS_sp_2Phi$BUGSoutput$mean$phy2[sInJAGS]),
+                      pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$sp[sInJAGS]))
+      }
+
+      #arrange input data
+      tasteAi <- sub$taste_left
+      tasteBi <- sub$taste_right
+      
+      subjecti <- sub$subject
+      ntrialsi <- nrow(sub)
+      #recode everything into taste vs. health choice
+      tasteL <- (tasteAi>tasteBi) #whether impatient option was left
+      healthA_s <- sub$health_left*(tasteL==T)+sub$health_right*(tasteL==F)
+      healthB_s <- sub$health_left*(tasteL==F)+sub$health_right*(tasteL==T)
+      tasteA_s <- sub$taste_left*(tasteL==T)+sub$taste_right*(tasteL==F)
+      tasteB_s <- sub$taste_left*(tasteL==F)+sub$taste_right*(tasteL==T)
+      
+      fixProp1_s <- sub$foodleft_time/(sub$foodleft_time+sub$foodright_time+sub$nutrileft_time+sub$nutriright_time) #taste left
+      fixProp2_s <- sub$foodright_time/(sub$foodleft_time+sub$foodright_time+sub$nutrileft_time+sub$nutriright_time)#taste right
+      fixProp3_s <- sub$nutrileft_time/(sub$foodleft_time+sub$foodright_time+sub$nutrileft_time+sub$nutriright_time)#amount left
+      fixProp4_s <- sub$nutriright_time/(sub$foodleft_time+sub$foodright_time+sub$nutrileft_time+sub$nutriright_time)#amount right
+    
+      fixProps <- matrix(c(fixProp1_s*(tasteL==T)+fixProp2_s*(tasteL==F),fixProp1_s*(tasteL==F)+fixProp2_s*(tasteL==T),
+                   fixProp3_s*(tasteL==T)+fixProp4_s*(tasteL==F),fixProp3_s*(tasteL==F)+fixProp4_s*(tasteL==T)),ncol=4)
+      #print(fixProps[,1])
+      
+      #rescale taste and health values to lie between 1 and 10 (as in Yang & Krajbich)
+      healthA_s <- (1+((healthA_s-min(healthA_s))*(10-1))/(max(healthA_s)-min(healthA_s)))
+      healthB_s <- (1+((healthB_s-min(healthB_s))*(10-1))/(max(healthB_s)-min(healthB_s)))
+      tasteA_s <- (1+((tasteA_s-min(tasteA_s))*(10-1))/(max(tasteA_s)-min(tasteA_s)))
+      tasteB_s <- (1+((tasteB_s-min(tasteB_s))*(10-1))/(max(tasteB_s)-min(tasteB_s)))
+      
+      #take only trials with fixations
+      validTrials <- which((is.na(fixProps[,1])==0)|(is.na(fixProps[,2])==0)|(is.na(fixProps[,3])==0)|(is.na(fixProps[,4])==0))
+
+      tasteA <- tasteA_s[validTrials]
+      tasteB <- tasteB_s[validTrials]
+      healthA <- healthA_s[validTrials]
+      healthB <- healthB_s[validTrials]
+      subject <- subjecti[validTrials]
+      fixProps <- fixProps[validTrials,]
+
+      #simulate
+      pr_Dat <- pr_sim_addmJAGS_sp_2Phi(parameters,tasteA,tasteB,healthA,healthB,subject,fixProps)
+      if (t==1){
+        simDat_JAGS_hungry <- rbind(simDat_JAGS_hungry, pr_Dat)
+        if (p==nParamRecov){ #save trial info at the last iteration
+          conflictTrials <- ((tasteA>tasteB)&(healthA<healthB))|((tasteA<tasteB)&(healthA>healthB))
+          conflictTrials_hungry <- c(conflictTrials_hungry,conflictTrials)
+        }
+      } else {
+        simDat_JAGS_sated <- rbind(simDat_JAGS_sated, pr_Dat)
+        if (p==nParamRecov){ #save trial info at the last iteration
+          conflictTrials <- ((tasteA>tasteB)&(healthA<healthB))|((tasteA<tasteB)&(healthA>healthB))
+          conflictTrials_sated <- c(conflictTrials_sated,conflictTrials)
+        }
+      }
+    }
+  }
+  ppDat_JAGS_hungry_choices[,p] = simDat_JAGS_hungry$choices
+  ppDat_JAGS_hungry_rts[,p] = simDat_JAGS_hungry$rts
+  ppDat_JAGS_sated_choices[,p] = simDat_JAGS_sated$choices
+  ppDat_JAGS_sated_rts[,p] = simDat_JAGS_sated$rts
+  
+  flush.console()
+  msg = sprintf('Done with parameter recovery: %d',p)
+  print(msg)
+}
+```
+
+
+# 3 Fit 2Phi Modell
+## 3.1 Prepare sim data hungry
+```{r}
+simDat_JAGS_hungry<-simDat_JAGS_hungry %>% 
+  mutate(response=recode(choices, '2'=1, '1'=0))
+simDat_JAGS_sated<-simDat_JAGS_sated %>% 
+  mutate(response=recode(choices, '2'=1, '1'=0))
+
+#loop over subjects to get the data and arrange it in the order needed
+uID <- unique(simDat_JAGS_hungry$subject)
+tasteA <- c()
+tasteB <- c()
+healthA <- c()
+healthB <- c()
+fixProp1 <- c()
+fixProp2 <- c()
+fixProp3 <- c()
+fixProp4 <- c()
+RT <- c()
+H <- c() #whether trial is hungry (1) or sated (0)
+P <- c() #participant number (from 1 till nsubj, so 1, 2, 3, 4, ..., nsubj)
+
+for (s in (unique(simDat_JAGS_hungry$subject))){
+  #loop over sessions (1 = hungry)
+  for (t in 1:2){
+    if (t == 1){ #session-specific stuff up front
+      sub <- simDat_JAGS_hungry[simDat_JAGS_hungry$subject == s, ] #hungry
+    } else {
+      sub <- simDat_JAGS_sated[simDat_JAGS_sated$subject == s, ] #sated
+    }
+    
+    response <- sub$response
+    rt_s <- sub$rts
+    rt_s[response==0] = -rt_s[response==0] #dwiener function in JAGS wants "negative" rt if choice == 0
+    tasteA_s <- sub$attribute1A
+    tasteB_s <- sub$attribute1B
+    healthA_s <- sub$attribute2A
+    healthB_s <- sub$attribute2B
+    ntrialsi <- nrow(sub)
+    fixProps <- sub[, c("V8", "V9", "V10", "V11")]
+    
+    #fill in "all-subject" vectors
+    tasteA <- c(tasteA,tasteA_s)
+    tasteB <- c(tasteB,tasteB_s)
+    healthA <- c(healthA,healthA_s)
+    healthB <- c(healthB,healthB_s)
+    fixProp1 <- c(fixProp1,fixProps[,1])
+    fixProp2 <- c(fixProp2,fixProps[,2])
+    fixProp3 <- c(fixProp3,fixProps[,3])
+    fixProp4 <- c(fixProp4,fixProps[,4])
+    RT <- c(RT,rt_s)
+    H <- c(H,rep(t==1,length(rt_s)))
+    P <- c(P,rep(which(uID==s),length(rt_s)))
+  }
+}
+
+tasteA <- (1+((tasteA-min(tasteA))*(10-1))/(max(tasteA)-min(tasteA))) 
+tasteB <- (1+((tasteB-min(tasteB))*(10-1))/(max(tasteB)-min(tasteB)))
+healthA <- (1+((healthA-min(healthA))*(10-1))/(max(healthA)-min(healthA)))
+healthB <- (1+((healthB-min(healthB))*(10-1))/(max(healthB)-min(healthB)))
+
+
+N <- length(RT)
+S <- length(unique(simDat_JAGS_hungry$subject))
+```
+
+## 3.2 maaDDM2 +sp Function
+```{r}
+# get data and initial values together and specify the model
+ddmData <- list('N'=N,'S'=S,'P'=P,'H'=H,'attribute1A'=tasteA,'attribute1B'=tasteB,'attribute2A'=healthA,'attribute2B'=healthB,'RT'=RT,
+                'fixProp1'=fixProp1,'fixProp2'=fixProp2,'fixProp3'=fixProp3,'fixProp4'=fixProp4)
+
+
+#starting values
+nChains <- 8
+
+#parallel computing apparently not possible
+T1<-Sys.time()
+recov_addmJAGS_sp_2Phi <- jags.parallel(ddmData,inits = NULL,#jags.seed = sample(100:999,1),
+                    parameters.to.save = c('mu_bound','sigma_bound','mu_ndt','sigma_ndt',
+                                           'mu_drift','sigma_drift','mu_weight1','sigma_weight1',
+                                           'mu_theta','sigma_theta','mu_phy','sigma_phy','mu_phy2','sigma_phy2','mu_sp','sigma_sp',
+                                           'mu_bound_H','sigma_bound_H','mu_ndt_H','sigma_ndt_H',
+                                           'mu_drift_H','sigma_drift_H','mu_weight1_H','sigma_weight1_H',
+                                           'mu_theta_H','sigma_theta_H','mu_phy_H','sigma_phy_H','mu_phy2_H','sigma_phy2_H','mu_sp_H','sigma_sp_H',
+                                           'bound','ndt','drift','weight1','theta','phy','phy2','sp',
+                                           'bound_H','ndt_H','drift_H','weight1_H','theta_H','phy_H','phy2_H','sp_H'),
+                    model.file = "BayesModel_maaDDM_sp_2Phi.txt",working.directory = 'BayesModels',
+                    n.chains = nChains, n.iter = 60000, n.burnin = 30000,n.thin = 12, DIC = TRUE,jags.module = c("glm","dic","wiener"))
+T2<-Sys.time() #T2-T1
+
+# check convergence
+ddmRhats <- recov_addmJAGS_sp_2Phi$BUGSoutput$summary[,8] #check with max(Rhats), which should ideally be < 1.01 (1.05 would also be okay)
+max(ddmRhats) # 1.005
+recov_addmJAGS_sp_2Phi$BUGSoutput$DIC # 66031.75
+
+
+save(recov_addmJAGS_sp_2Phi, file = "param_recov_2phi_sp_food.RData")
+```
+
+
+
+```{r}
+#correlations always sated and hungry for each parameter: bound, ndt, starting point, taste weight, health weight, theta and phi
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$bound, addmJAGS_sp_2Phi$BUGSoutput$mean$bound)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$bound+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$bound_H, addmJAGS_sp_2Phi$BUGSoutput$mean$bound+addmJAGS_sp_2Phi$BUGSoutput$mean$bound_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$ndt, addmJAGS_sp_2Phi$BUGSoutput$mean$ndt)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$ndt+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$ndt_H, addmJAGS_sp_2Phi$BUGSoutput$mean$ndt+addmJAGS_sp_2Phi$BUGSoutput$mean$ndt_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$sp, addmJAGS_sp_2Phi$BUGSoutput$mean$sp)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$sp_H, addmJAGS_sp_2Phi$BUGSoutput$mean$sp+addmJAGS_sp_2Phi$BUGSoutput$mean$sp_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$sp_H+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$weight1, addmJAGS_sp_2Phi$BUGSoutput$mean$weight1)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$weight1+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$weight1_H, addmJAGS_sp_2Phi$BUGSoutput$mean$weight1+addmJAGS_sp_2Phi$BUGSoutput$mean$weight1_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$theta, addmJAGS_sp_2Phi$BUGSoutput$mean$theta)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$theta+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$theta_H, addmJAGS_sp_2Phi$BUGSoutput$mean$theta+addmJAGS_sp_2Phi$BUGSoutput$mean$theta_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy, addmJAGS_sp_2Phi$BUGSoutput$mean$phy)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy_H, addmJAGS_sp_2Phi$BUGSoutput$mean$phy+addmJAGS_sp_2Phi$BUGSoutput$mean$phy_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy2, addmJAGS_sp_2Phi$BUGSoutput$mean$phy2)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy2+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy2_H, addmJAGS_sp_2Phi$BUGSoutput$mean$phy2+addmJAGS_sp_2Phi$BUGSoutput$mean$phy2_H)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$drift, addmJAGS_sp_2Phi$BUGSoutput$mean$drift)
+cor(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$drift+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$drift_H, addmJAGS_sp_2Phi$BUGSoutput$mean$drift+addmJAGS_sp_2Phi$BUGSoutput$mean$drift_H)
+
+# make some graphs!!
+```
+
+### 3.3.2 Graphs
+```{r}
+# a) Boundary seperation
+bound_rec <- data.frame(
+  rec_sated = log(1+exp(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$bound)),
+  true_sated = log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$bound)),
+  rec_hungry = log(1+exp(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$bound+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$bound_H)),
+  true_hungry = log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$bound+addmJAGS_sp_2Phi$BUGSoutput$mean$bound_H))
+)
+
+# Plot
+bound_pr <- ggplot(bound_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "bound (true)",
+       y = "bound (recovered)",
+       color = "Condition") +
+  #geom_text(aes(x = 5, y = 0.5, label = sprintf("R(sated): %.2f", cor(bound_rec$rec_sated, bound_rec$true_sated))),hjust = 1, vjust = 0, color = "black") +
+  #geom_text(aes(x = 5, y = 0.1, label = sprintf("R(hungry): %.2f", cor(bound_rec$rec_hungry, bound_rec$true_hungry))),hjust = 1, vjust = 1, color = "black") +
+  ylim(0, 5) +
+  xlim(0, 5) +
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# b) NDT
+ndt_rec <- data.frame(
+  rec_sated = log(1+exp(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$ndt)),
+  true_sated = log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$ndt)),
+  rec_hungry = log(1+exp(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$ndt+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$ndt_H)),
+  true_hungry = log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$ndt+addmJAGS_sp_2Phi$BUGSoutput$mean$ndt_H))
+)
+
+# Plot
+ndt_pr <-ggplot(ndt_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "nDT (true)",
+       y = "nDT (recovered)",
+       color = "Condition") +
+  ylim(0,2)+
+  xlim(0,2)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# c) taste weight
+taste_rec <- data.frame(
+  rec_sated = recov_addmJAGS_sp_2Phi$BUGSoutput$mean$weight1,
+  true_sated = addmJAGS_sp_2Phi$BUGSoutput$mean$weight1,
+  rec_hungry = (recov_addmJAGS_sp_2Phi$BUGSoutput$mean$weight1+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$weight1_H),
+  true_hungry = addmJAGS_sp_2Phi$BUGSoutput$mean$weight1+addmJAGS_sp_2Phi$BUGSoutput$mean$weight1_H
+)
+
+# Plot
+taste_pr <-ggplot(taste_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "taste weight (true)",
+       y = "taste weight (recovered)",
+       color = "Condition") +
+  ylim(-1,2.5)+
+  xlim(-1,2.5)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# d) Drift
+drift_rec <- data.frame(
+  rec_sated = log(1+exp(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$drift)),
+  true_sated = log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$drift)),
+  rec_hungry = log(1+exp(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$drift+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$drift_H)),
+  true_hungry = log(1+exp(addmJAGS_sp_2Phi$BUGSoutput$mean$drift+addmJAGS_sp_2Phi$BUGSoutput$mean$drift_H))
+)
+
+# Plot
+drift_pr <-ggplot(drift_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "drift (true)",
+       y = "drift (recovered)",
+       color = "Condition") +
+  ylim(0,0.6)+
+  xlim(0,0.6)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# e) theta
+theta_rec <- data.frame(
+  rec_sated = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$theta),
+  true_sated = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$theta),
+  rec_hungry = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$theta+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$theta_H),
+  true_hungry = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$theta+addmJAGS_sp_2Phi$BUGSoutput$mean$theta_H)
+)
+
+# Plot
+theta_pr <-ggplot(theta_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "theta (true)",
+       y = "theta (recovered)",
+       color = "Condition") +
+  ylim(0,1)+
+  xlim(0,1)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# f) phi 1
+phi_rec <- data.frame(
+  rec_sated = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy),
+  true_sated = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$phy),
+  rec_hungry = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy_H),
+  true_hungry = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$phy+addmJAGS_sp_2Phi$BUGSoutput$mean$phy_H)
+)
+
+# Plot
+phi_pr <-ggplot(phi_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "phi taste (true)",
+       y = "phi taste (recovered)",
+       color = "Condition") +
+  ylim(0,1)+
+  xlim(0,1)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# g) phi 2
+phi2_rec <- data.frame(
+  rec_sated = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy2),
+  true_sated = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$phy2),
+  rec_hungry = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy2+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$phy2_H),
+  true_hungry = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$phy2+addmJAGS_sp_2Phi$BUGSoutput$mean$phy2_H)
+)
+
+# Plot
+phi2_pr <-ggplot(phi2_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "phi health (true)",
+       y = "phi health (recovered)",
+       color = "Condition") +
+  ylim(-1,1.5)+
+  xlim(-1,1.5)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+# f) starting point
+sp_rec <- data.frame(
+  rec_sated = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$sp),
+  true_sated = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$sp),
+  rec_hungry = pnorm(recov_addmJAGS_sp_2Phi$BUGSoutput$mean$sp+recov_addmJAGS_sp_2Phi$BUGSoutput$mean$sp_H),
+  true_hungry = pnorm(addmJAGS_sp_2Phi$BUGSoutput$mean$sp+addmJAGS_sp_2Phi$BUGSoutput$mean$sp_H)
+)
+
+# Plot
+sp_pr <-ggplot(sp_rec) +
+  geom_point(aes(x = true_sated, y = rec_sated ), color = "cornflowerblue", alpha = 0.7) +
+  geom_point(aes(x = true_hungry, y = rec_hungry), color = "gold", alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = "solid") +
+  labs(title = "",
+       x = "starting point (true)",
+       y = "starting point  (recovered)",
+       color = "Condition") +
+  ylim(0.4,0.6)+
+  xlim(0.4,0.6)+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+
+library("cowplot")
+# Arrange the plots side by side
+recov_plot_maaddm2phi <- plot_grid(taste_pr, drift_pr, ndt_pr,bound_pr, theta_pr, phi_pr, phi2_pr, sp_pr, labels = c("a","b", "c", "d", "e", "f", "g", "h"), label_size = 20, ncol = 4, align = "h")
+recov_plot_maaddm2phi
+# Save the combined plot as a PNG file
+ggsave("recov_plot_maaddm2phi_food.png", recov_plot_maaddm2phi, width = 18, height = 9)
+```
+
