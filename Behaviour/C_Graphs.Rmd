@@ -6,7 +6,7 @@ date: "2024-10-08"
 
 ### Information
 This script creates the quantile plots and VD plots.
-**Requirements** had_data.RData (in data folder from this git repository: https://github.com/JenniferMarch/Hunger_across_domains)
+**Requirements** had_data.RData; had_data_2.RData (in data folder from this git repository: https://github.com/JenniferMarch/Hunger_across_domains)
 
 ### 1 Preparation
 #### 1.1 Load Data
@@ -18,6 +18,7 @@ rm(list=ls())
 if(!is.null(dev.list())) dev.off()
 
 load('had_data.RData')
+load('had_data_2.RData')
 ```
 
 #### 1.2 Create Theme
@@ -45,6 +46,7 @@ myTheme <- theme(
 ### 2 Quantile Plots
 Function
 ```{r}
+library(dplyr)
 create_quantile_plot <- function(data, choice_col, condition_col, rt_col, quants = seq(0.1, 0.9, 0.2), label_type = "default") {
   
   # Calculate quantiles for each combination
@@ -118,7 +120,7 @@ create_quantile_plot <- function(data, choice_col, condition_col, rt_col, quants
     xlab("RT (sec)") +
     ylab("Cumulative Probability") +
     ylim(0, 1) +
-    xlim(0.4, 4.8) +
+    xlim(0.4, 5.4) +
     scale_color_manual(values = color_values) +
     scale_linetype_manual(values = linetype_values) +
     guides(
@@ -137,18 +139,9 @@ create_quantile_plot <- function(data, choice_col, condition_col, rt_col, quants
 
 Run and save
 ```{r}
-data_combined <- data_combined %>%
-  dplyr::mutate(choice2 = dplyr::recode(as.character(choice), "taste" = 1, "health" = 0))
-
-data_social_combined <- data_social_combined %>%
-  dplyr::mutate(choice2 = dplyr::recode(as.character(choice), "selfish" = 1, "prosocial" = 0))
-
-data_discount_combined <- data_discount_combined %>%
-  dplyr::mutate(choice2 = dplyr::recode(as.character(choice), "impulsive" = 1, "patient" = 0))
-
-p1 <- create_quantile_plot(data_combined, "choice2", "condition", "RT", label_type = "default")
-p2 <- create_quantile_plot(data_social_combined, "choice2", "condition", "RT", label_type = "social")
-p3 <- create_quantile_plot(data_discount_combined, "choice2", "condition", "RT", label_type = "discount")
+p1 <- create_quantile_plot(data_combined2, "choice2", "condition", "RT", label_type = "default")
+p2 <- create_quantile_plot(data_combined_social2, "choice2", "condition", "RT", label_type = "social")
+p3 <- create_quantile_plot(data_combined_discount2, "choice2", "condition", "RT", label_type = "discount")
 
 p1
 p2
@@ -177,11 +170,26 @@ data_combined_neu<-data_combined_neu %>%
 data_combined_neu<-data_combined_neu %>% 
   dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
 
-data_social_combined<-data_social_combined %>% 
-  dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
+# # Berkowich transformation 
+# 
+# berk_trans <- function (data, value_column1, value_column2, vd_column, mini, maxi){
+#   data[[value_column1]] <- (mini+((data[[value_column1]]-min(data[[value_column1]]))*(maxi-mini))/(max(data[[value_column1]])-min(data[[value_column1]])))
+#   data[[value_column2]] <- (mini+((data[[value_column2]]-min(data[[value_column2]]))*(maxi-mini))/(max(data[[value_column2]])-min(data[[value_column2]])))
+#   data[[vd_column]] <- data[[value_column1]] - data[[value_column2]]
+#   return(data)
+# }
+# 
+# data_combined_neu <- berk_trans(data_combined_neu, "taste_left", "taste_right", "taste_vd", 1, 10)
+# data_combined_neu <- berk_trans(data_combined_neu, "health_left", "health_right", "health_vd", 1, 10)
+# data_combined_neu <- berk_trans(data_combined_neu, "pref_left", "pref_right", "pref_vd", 1, 10)
+# data_combined_neu <- berk_trans(data_combined_neu, "cal_left", "cal_right", "cal_vd", 1, 10)
+# 
+# data_social_combined <- berk_trans(data_social_combined, "self_left", "self_right", "self_vd", 1, 10)
+# data_social_combined <- berk_trans(data_social_combined, "ngo_left", "ngo_right", "ngo_vd", 1, 10)
+# 
+# data_discount_combined <- berk_trans(data_discount_combined, "time_left", "time_right", "time_vd", 1, 10)
+# data_discount_combined <- berk_trans(data_discount_combined, "value_left", "value_right", "value_vd", 1, 10)
 
-data_discount_combined<-data_discount_combined %>% 
-  dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
 ```
 
 Function
@@ -210,10 +218,12 @@ vd_graphs <- function(data, value_column, x_label, num_bins, RTmin, RTmax, vd_mi
     geom_smooth(aes(y = meanRT, fill = condition),method = "loess", formula = y ~ x, se = TRUE, span = 1, alpha = 0.3) +
     scale_color_manual(values = c("gold", "cornflowerblue")) +
     scale_fill_manual(values = c("gold", "cornflowerblue")) +
-    labs(x = paste(x_label, "Value Difference"), y = "Response Time") +
+    labs(x = (paste0("VD(",x_label," Left - ",x_label," Right)")), y = "Response Time (ms)") +
     scale_x_continuous(breaks = seq(vd_min, vd_max, length.out = 5)) +
     scale_y_continuous(breaks = seq(RTmin, RTmax, by = 200)) +  # Add this line
+    geom_vline(xintercept = 0, linetype = "dashed") +
     coord_cartesian(ylim = c(RTmin, RTmax)) +
+    xlim(vd_min+1, vd_max+1)+
     myTheme 
     #theme(legend.position = "right",
           #axis.text.x = element_text(angle = 45, hjust = 1))
@@ -224,9 +234,12 @@ vd_graphs <- function(data, value_column, x_label, num_bins, RTmin, RTmax, vd_mi
     geom_smooth(aes(y = meanchoice, fill = condition),method = "loess", formula = y ~ x, se = TRUE, span = 1, alpha = 0.3) +
     scale_color_manual(values = c("gold", "cornflowerblue")) +
     scale_fill_manual(values = c("gold", "cornflowerblue")) +
-    labs(x = paste(x_label, "Value Difference"), y = "P(Choice Left)") +
+    labs(x = (paste0("VD(",x_label," Left - ",x_label," Right)")), y = "P(Choice Left)") +
     scale_x_continuous(breaks = seq(vd_min, vd_max, length.out = 5)) +
+    geom_hline(yintercept = 0.5, linetype = "dashed") +
+    geom_vline(xintercept = 0, linetype = "dashed") +
     ylim(0, 1) +
+    xlim(vd_min+1, vd_max+1)+
     myTheme 
     #theme(legend.position = "right",
           #axis.text.x = element_text(angle = 45, hjust = 1))
@@ -244,13 +257,13 @@ taste_graphs
 health_graphs <- vd_graphs(data_combined_neu, "health_vd2", "Health", 12, 1700, 2900, min(data_combined_neu$health_vd2), max(data_combined_neu$health_vd2))
 health_graphs
 # For nutrition graphs
-nutri_graphs <- vd_graphs(data_combined_neu, "nutri_diff2", "Nutri", 12, 1700, 2900, min(data_combined_neu$nutri_diff2), max(data_combined_neu$nutri_diff2))
+nutri_graphs <- vd_graphs(data_combined_neu, "nutri_diff", "Nutri", 12, 1700, 2900, min(data_combined_neu$nutri_diff2), max(data_combined_neu$nutri_diff2))
 nutri_graphs
 # For preference graphs
-pref_graphs <- vd_graphs(data_combined_neu, "pref_vd2", "Preference", 12, 1700, 2900, min(data_combined_neu$pref_vd2), max(data_combined_neu$pref_vd2))
+pref_graphs <- vd_graphs(data_combined_neu, "pref_vd2", "Wanting", 12, 1700, 2900, min(data_combined_neu$pref_vd2), max(data_combined_neu$pref_vd2))
 pref_graphs
 # For calorie graphs
-cal_graphs <- vd_graphs(data_combined_neu, "cal_vd2", "Caloric", 12, 1700, 2900, min(data_combined_neu$cal_vd2), max(data_combined_neu$cal_vd2))
+cal_graphs <- vd_graphs(data_combined_neu, "cal_vd2", "Calorie", 12, 1700, 2900, min(data_combined_neu$cal_vd2), max(data_combined_neu$cal_vd2))
 cal_graphs
 
 ggsave("taste_choice.png", taste_graphs$choice_plot, width = 8, height = 6)
@@ -272,14 +285,14 @@ ggsave("cal_rt.png", cal_graphs$rt_plot, width = 8, height = 6)
 #### 3.2 Social
 ```{r}
 #calculate the value differences left - right
-data_social_combined$self_vd2<-data_social_combined$self_left-data_social_combined$self_right
-data_social_combined$ngo_vd2<-data_social_combined$ngo_left-data_social_combined$ngo_right
+data_combined_social2$self_vd2<-data_combined_social2$self_left-data_combined_social2$self_right
+data_combined_social2$ngo_vd2<-data_combined_social2$ngo_left-data_combined_social2$ngo_right
 
 # For self graphs
-self_graphs <- vd_graphs(data_social_combined, "self_vd2", "Self", 12, 1500, 2500, min(data_social_combined$self_vd2), max(data_social_combined$self_vd2))
+self_graphs <- vd_graphs(data_combined_social2, "self_vd2", "Self", 12, 1500, 2500, min(data_combined_social2$self_vd2), max(data_combined_social2$self_vd2))
 self_graphs
 # For ngo graphs
-NGO_graphs <- vd_graphs(data_social_combined, "ngo_vd2", "NGO", 12, 1500, 2500, min(data_social_combined$ngo_vd2), max(data_social_combined$ngo_vd2))
+NGO_graphs <- vd_graphs(data_combined_social2, "ngo_vd2", "NGO", 12, 1500, 2500, min(data_combined_social2$ngo_vd2), max(data_combined_social2$ngo_vd2))
 NGO_graphs
 
 ggsave("self_choice.png", self_graphs$choice_plot, width = 8, height = 6)
@@ -292,14 +305,14 @@ ggsave("ngo_rt.png", NGO_graphs$rt_plot, width = 8, height = 6)
 #### 3.3 Discount
 ```{r}
 #calculate the value differences left - right
-data_discount_combined$value_vd2<-data_discount_combined$value_left-data_discount_combined$value_right
-data_discount_combined$time_vd2<-data_discount_combined$time_left-data_discount_combined$time_right
+data_combined_discount2$value_vd2<-data_combined_discount2$value_left-data_combined_discount2$value_right
+data_combined_discount2$time_vd2<-data_combined_discount2$time_left-data_combined_discount2$time_right
 
-# For self graphs
-imp_graphs <- vd_graphs(data_discount_combined, "value_vd2", "Amount", 12, 1300, 2400, min(data_discount_combined$value_vd2), max(data_discount_combined$value_vd2))
+# For amount graphs
+imp_graphs <- vd_graphs(data_combined_discount2, "value_vd2", "Amount", 12, 1300, 2400, min(data_combined_discount2$value_vd2), max(data_combined_discount2$value_vd2))
 imp_graphs
-# For ngo graphs
-pat_graphs <- vd_graphs(data_discount_combined, "time_vd2", "Time", 12, 1300, 2400, min(data_discount_combined$time_vd2), max(data_discount_combined$time_vd2))
+# For delay graphs
+pat_graphs <- vd_graphs(data_combined_discount2, "time_vd2", "Time", 12, 1300, 2400, min(data_combined_discount2$time_vd2), max(data_combined_discount2$time_vd2))
 pat_graphs
 
 ggsave("impatient_choice.png", imp_graphs$choice_plot, width = 8, height = 6)

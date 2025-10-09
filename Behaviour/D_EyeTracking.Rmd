@@ -8,16 +8,8 @@ date: "2024-10-09"
 Eye-tracking for social and discounting; the one for food can be found here: https://github.com/JenniferMarch/HungryLens/blob/main/Behaviour/D_Eyetracking.Rmd
 
 ## 1 Preperations
-### 1.1 Load Libraries
-```{r}
-#clear working environment
-rm(list=ls())
 
-#clear all plots
-if(!is.null(dev.list())) dev.off()
-```
-
-### 1.2 Chreate Theme for figures
+### 1.1 Chreate Theme for figures
 ```{r}
 library(ggplot2)
 myTheme <- theme(
@@ -37,110 +29,221 @@ myTheme <- theme(
   legend.key.size = unit(3, "lines"))
 ```
 
-### 1.3 Load Pre-processed Data
+### 1.2 Load Pre-processed Data
 ```{r}
-load('had_data.RData')
+load('had_data_2.RData')
+load("food_modeling_data.RData")
 load("social_modeling_data.RData")
 load("discount_modeling_data.RData")
+
+
+
 ```
 
 
-## 2 Social
-### 2.1 choose selfish given dwell time option
+## 2 Food
+### 2.1 Choose taste given dwell time (Fig 3a)
+```{r}
+# library(dplyr)
+# # #recode taste/health 
+# data_combined2$dwelldiff_taste <- 0
+# data_combined2$dwelldiff_rel_taste <- 0
+# data_combined2$total_dt <- data_combined2$foodleft_time + data_combined2$foodright_time + data_combined2$nutrileft_time + data_combined2$nutriright_time
+# 
+# data_combined2$choice2 <- ifelse(data_combined2$choice == "taste", 1, 0)
+# 
+# for (i in 1:nrow(data_combined2)){
+#   if((data_combined2$choice2[i]==1) && (data_combined2$response[i]=='left')) { # taste & left
+#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])
+#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i]))/data_combined2$total_dt[i]
+#   
+#     }else if ((data_combined2$choice2[i]==1) && (data_combined2$response[i]=='right')) { # taste & right
+#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])
+#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i]))/data_combined2$total_dt[i]
+#     
+#   }else if ((data_combined2$choice2[i]==0) && (data_combined2$response[i]=='left')) { # health & left
+#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])
+#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i]))/data_combined2$total_dt[i]
+#     
+#   }else if ((data_combined2$choice2[i]==0) && (data_combined2$response[i]=='right')) { # health & right
+#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])
+#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i]))/data_combined2$total_dt[i]
+#   }
+# } 
+
+```
+
 ```{r}
 library(dplyr)
-data_social_combined<-data_social_combined %>% 
-  dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
-
-# #recode ngo/value 
-data_social_combined$dwelldiff_time <- 0
-for (i in 1:nrow(data_social_combined)){
-  if((data_social_combined$choice2[i]==1) && (data_social_combined$response2[i]==1)) { # ngo & left
-    data_social_combined$dwelldiff_time[i] = (data_social_combined$ngoleft_time[i]+data_social_combined$selfleft_time[i])-(data_social_combined$ngoright_time[i]+data_social_combined$selfright_time[i])
-  }else if ((data_social_combined$choice2[i]==1) && (data_social_combined$response2[i]==0)) { # ngo & right
-    data_social_combined$dwelldiff_time[i] = (data_social_combined$ngoright_time[i]+data_social_combined$selfright_time[i])-(data_social_combined$ngoleft_time[i]+data_social_combined$selfleft_time[i])
-  }else if ((data_social_combined$choice2[i]==0) && (data_social_combined$response2[i]==1)) { # self & left
-    data_social_combined$dwelldiff_time[i] = (data_social_combined$ngoright_time[i]+data_social_combined$selfright_time[i])-(data_social_combined$ngoleft_time[i]+data_social_combined$selfleft_time[i])
-  }else if ((data_social_combined$choice2[i]==0) && (data_social_combined$response2[i]==0)) { # self & right
-    data_social_combined$dwelldiff_time[i] = (data_social_combined$ngoleft_time[i]+data_social_combined$selfleft_time[i])-(data_social_combined$ngoright_time[i]+data_social_combined$selfright_time[i])
-  }
-} 
-
-# Define the bin edges
-bin_edges <- c(-Inf, -700, -500, -300, -100, 100, 300, 500, 700, Inf)
-
-data_social_combined$bin2 <- cut(data_social_combined$dwelldiff_time, breaks = bin_edges,
-                                labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", 
-                                            ">700"),
-                                include.lowest = TRUE, right = FALSE)
-
-```
-
-```{r}
 # Calculate the mean probability and standard error for each bin
-summary_ngo <- data_social_combined %>%
-  mutate(bin2 = cut(dwelldiff_time, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
-  group_by(bin2, condition) %>%
-  summarise(mean_prob_ngo = mean(choice2),
-            std_error_ngo = sd(choice2) / sqrt(n()))
+# summary_taste <- data_combined2 %>%
+#   mutate(bin2 = cut(dwelldiff_taste, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
+#   group_by(bin2, condition) %>%
+#   summarise(mean_prob_taste = mean(choice2),
+#             std_error_taste = sd(choice2) / sqrt(n()))
 
-
-p1 <- ggplot(summary_ngo, aes(x = bin2, y = mean_prob_ngo, color = condition, group = condition)) +
-  geom_smooth(aes(y = mean_prob_ngo, fill = condition), method = "loess", span = 0.75, se = TRUE, linetype = "solid", alpha=0.3) +
+p1 <- ggplot(data_combined2, aes(x =dwelldiff_taste_rel, y = choice2, color = condition, fill=condition)) +
+  geom_smooth(method = "glm", se = TRUE,  method.args = list(family=binomial), linetype = "solid", alpha=0.3) +
   scale_color_manual(values = c("gold", "cornflowerblue")) +
   scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
-  labs(x = "Dwell Time Difference", y = "P(Selfish Choice)") +
+  labs(x = expression(bold(paste("DT", Delta, "(option"[paste("tasty")], " - option"[paste("healthy")], ")"))),, y = "P(Tasty Choice)") +
   geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
+  geom_vline(xintercept = 0.5, color = "black", linetype = "dashed") +  
   ylim(0,1)+
-  myTheme
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+ggsave("pchoice_dwelltime.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
+p1
+
+
+```
+
+### 2.2 
+### 2.1 choose tasty given dwell time taste
+
+```{r}
+library(ggdist)
+
+summary_taste <- data_combined2 %>%
+  group_by(nutri, condition, subject) %>%
+  summarise(mean_prob_taste = mean(choice2),
+            std_error_time = sd(choice2) / sqrt(n()))
+
+
+p2 <- ggplot(summary_taste, aes(x = as.factor(nutri), y = mean_prob_taste, fill = condition, color = condition)) +
+  # Add the cloud (violin plot)
+  stat_halfeye(
+    adjust = 0.5,
+    width = 0.5,
+    alpha = 0.5,
+    justification = -0.2,
+    .width = 0,
+    point_colour = NA,
+    position = position_dodge(width = 0.8)  # Add dodge to violin plots
+  ) +
+  # Add the rain (individual points)
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.8, jitter.width = 0.15),
+    size = 1,
+    alpha = 0.5
+  ) +
+  # Add boxplot
+  geom_boxplot(
+    width = 0.1,
+    position = position_dodge(width = 0.8),  # Make sure dodge width matches
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  # Customize colors
+  scale_fill_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  # Customize labels and theme
+  labs(
+    x = "Nutri Score Fixated",
+    y = "P(Tasty Choice)",
+    fill = "Condition",
+    color = "Condition"
+  ) +
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+ggsave("pchoice_dwelltime_nutri.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
+p2
+
+```
+
+
+## 3 Social
+### 2.1 choose selfish given dwell time option
+
+```{r}
+p1 <- ggplot(data_combined_social2, aes(x =(dwelldiff_rel_time), y = choice2, color = condition, fill=condition)) +
+    geom_smooth(method = "glm", se = TRUE, 
+              aes(fill = condition), method.args = list(family=binomial), alpha = 0.3) +
+  scale_color_manual(values = c("gold", "cornflowerblue")) +
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
+  labs(x = expression(bold(paste("DT", Delta, "(option"[paste("selfish")], " - option"[paste("prosocial")], ")"))), y = "P(Selfish Choice)") +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "black", linetype = "dashed") +  
+  ylim(0,1)+
+  myTheme+
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
 ggsave("pchoice_dwelltime_social.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 p1
+
 ```
+
 
 ### 2.1 choose selfish given dwell time self
 ```{r}
-# #recode ngo/value 
-data_social_combined$dwelldiff_time_self <- data_social_combined$selfleft_time+data_social_combined$selfright_time - data_social_combined$ngoleft_time+data_social_combined$ngoright_time
+# add again GLMM to create prediction plot
+library(lme4)
+library(lmerTest)
+social_model4 <- glmer(choice2 ~ condition + scale(dwelldiff_rel_time) + scale(rel_dwelldiff_self2) + (1 + condition + scale(rel_dwelldiff_self2)| subject), data = data_combined_social2, family = binomial(link = "logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
 ```
 
 ```{r}
-# Calculate the mean probability and standard error for each bin
-summary_self <- data_social_combined %>%
-  mutate(bin2 = cut(dwelldiff_time_self, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
-  group_by(bin2, condition) %>%
-  summarise(mean_prob_ngo = mean(choice2),
-            std_error_ngo = sd(choice2) / sqrt(n()))
+# Create prediction data frame with a reference subject
+reference_subject <- data_combined_social2$subject[1]
 
+pred_data <- expand.grid(
+  rel_dwelldiff_self2 = seq(-1, 1, length.out = 100),
+  condition = c("hungry", "sated"),
+  dwelldiff_rel_time = mean(data_combined_social2$dwelldiff_rel_time, na.rm = TRUE),
+  subject = reference_subject
+)
 
-p2 <- ggplot(summary_self, aes(x = bin2, y = mean_prob_ngo, color = condition, group = condition)) +
-  geom_smooth(aes(y = mean_prob_ngo, fill = condition), method = "loess", span = 0.75, se = TRUE, linetype = "solid", alpha=0.3) +
+# Get predictions using only fixed effects (ignoring the random effects)
+pred_intervals <- merTools::predictInterval(social_model4, newdata = pred_data, 
+                                 level = 0.95, n.sims = 5000,
+                                 type = "probability", which = "fixed")
+
+pred_data$predicted <- pred_intervals$fit
+pred_data$lower <- pred_intervals$lwr
+pred_data$upper <- pred_intervals$upr
+
+n <- 140 # 70*2 
+pred_data$se <- sqrt(pred_data$predicted * (1 - pred_data$predicted) / n)
+
+# Create plot
+ggplot(pred_data, aes(x = rel_dwelldiff_self2, y = predicted, color = condition)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = predicted-se, ymax = predicted+se, fill = condition), 
+              alpha = 0.2, color = NA) +
   scale_color_manual(values = c("gold", "cornflowerblue")) +
-  scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
-  labs(x = "Dwell Time Difference Self vs NGO", y = "P(Selfish Choice)") +
-  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
-  ylim(0,1)+
-  myTheme
-ggsave("pchoice_dwelltime_socialvsngo.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
-p2
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +
+  labs(x = expression(bold(paste("DT", Delta, "(attribute"[paste("self")], " - attribute"[paste("NGO")], ")"))), y = "P(Selfish Choice)") +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  ylim(0,1) +
+  myTheme+
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+ggsave("attributedt_choice_social.png", width = 8, height = 6, plot = last_plot(), dpi = 300)
 ```
+
 
 
 ### 2.2 Plot more attention to ngo attribute under hunger?
 ```{r}
-data_social_combined$att_ngo<-0
-for (n in 1:nrow(data_social_combined)) {
-  data_social_combined$att_self[n] <- (data_social_combined$selfleft_time[n] + data_social_combined$selfright_time[n]) /
-                (sum(data_social_combined$ngoleft_time[n] + data_social_combined$ngoright_time[n] +
-                    data_social_combined$selfleft_time[n] + data_social_combined$selfright_time[n]))
-}
+data_combined_social2$att_self <- (data_combined_social2$selfleft_time + data_combined_social2$selfright_time) / data_combined_social2$total_dt
 
-#delete NA trials
-data_social_combined3 <- subset(data_social_combined,att_self!='NaN')
-
-combined_summary <- data_social_combined3 %>%
+combined_summary <- data_combined_social2 %>%
   group_by(subject, condition) %>%
   summarise(mean_att_self = mean(att_self),
             std_error = sd(att_self) / sqrt(n()))
@@ -149,7 +252,7 @@ library(ggdist)
 
 # Create a raincloud plot
 raincloud_plot <- ggplot(combined_summary, aes(x = condition, y = mean_att_self, fill = condition)) +
-  geom_violin(trim = FALSE, alpha = 0.8) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
   #geom_boxplot(width = 0.1, fill = "white", color = "black", outlier.shape = NA) +
   geom_point(position = position_jitter(width = 0.15), size = 1) +
   geom_hline(yintercept = 0.5, color = "black", linetype="dashed") +
@@ -179,26 +282,35 @@ ttest
 effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
 # no difference
 ```
+
+Does HS predict attention 
 ```{r}
-combined_summary1 <- data_social_combined3 %>%
+combined_summary_social <- data_combined_social2 %>%
   group_by(subject, condition) %>%
-  summarise(mean_att_self = mean(dwelldiff_time_self),
-            std_error = sd(dwelldiff_time_self) / sqrt(n()))
+  summarise(mean_att_option = mean(dwelldiff_rel_time),
+            mean_att_attribute = mean(rel_dwelldiff_self2))
+
+ttest2<-t.test(combined_summary_social$mean_att_option[combined_summary_social$condition == "hungry"], combined_summary_social$mean_att_option[combined_summary_social$condition == "sated"], paired=TRUE)
+ttest2
+
+effect_size_tt2 <- ttest2$statistic / sqrt(ttest2$parameter)
+effect_size_tt2
+
+ttest3<-t.test(combined_summary_social$mean_att_attribute[combined_summary_social$condition == "hungry"], combined_summary_social$mean_att_attribute[combined_summary_social$condition == "sated"], paired=TRUE)
+ttest3
 
 
-att_self_h2<-subset(combined_summary1, condition =='hungry')
-att_self_s2<-subset(combined_summary1, condition =='sated')
+effect_size_tt3 <- ttest3$statistic / sqrt(ttest3$parameter)
+effect_size_tt3
 
-ttest<-t.test(att_self_h2$mean_att_self, att_self_s2$mean_att_self, paired=TRUE)
-ttest
 ```
 
 
 ### 2.3 Lets take a look at first and last fixations
 ```{r}
-nsubj <- length(unique(data_combined$subject))
+nsubj <- length(unique(data_combined2$subject))
 data_social_hungry_long_w0<-data_social_hungry_long
-data_social_sated_long_w0<-data_social_hungry_long
+data_social_sated_long_w0<-data_social_sated_long
 data_social_hungry_long<-subset(data_social_hungry_long, fixElement != 0)
 data_social_sated_long<-subset(data_social_sated_long, fixElement != 0)
 ```
@@ -246,6 +358,7 @@ data_social_sated_long$fixElement2 <- recode_fixation(data_social_sated_long$fix
 #### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
 ##### 2.3.2.1 hungry
 ```{r}
+library("dplyr")
 # Group the data by trial and subject
 grouped_social_data_hungry <- data_social_hungry_long %>%
   group_by(trial, subject)
@@ -254,7 +367,7 @@ grouped_social_data_hungry <- data_social_hungry_long %>%
 # Extract the first fixated element for each trial
 first_fix_social_hungry <- grouped_social_data_hungry %>%
   slice(1) %>%
-  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+  dplyr::select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
 
 #category
 first_fix_social_hungry_cat<-first_fix_social_hungry %>%
@@ -273,7 +386,7 @@ first_fix_social_hungry_loc<-first_fix_social_hungry %>%
 # Extract the last fixated element for each trial
 last_fix_social_hungry <- grouped_social_data_hungry %>%
   slice(n()) %>%
-  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+  dplyr::select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
 
 #category
 last_fix_social_hungry_cat<-last_fix_social_hungry %>%
@@ -300,7 +413,7 @@ grouped_social_data_sated <- data_social_sated_long %>%
 # Extract the first fixated element for each trial
 first_fix_social_sated <- grouped_social_data_sated %>%
   slice(1) %>%
-  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+  dplyr::select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
 
 #category
 first_fix_social_sated_cat<-first_fix_social_sated %>%
@@ -319,7 +432,7 @@ first_fix_social_sated_loc<-first_fix_social_sated %>%
 # Extract the last fixated element for each trial
 last_fix_social_sated <- grouped_social_data_sated %>%
   slice(n()) %>%
-  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+  dplyr::select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
 
 #category
 last_fix_social_sated_cat<-last_fix_social_sated %>%
@@ -337,7 +450,7 @@ last_fix_social_sated_loc<-last_fix_social_sated %>%
 ```
 
 
-#PLOT THE STUFF!!
+PLOT THE STUFF!!
 ```{r}
 plot_fixation_proportions <- function(hungry_data, sated_data, fixation_type = c("first", "last"), plot_type = c("location", "category"),custom_labels = NULL) {
   
@@ -379,11 +492,12 @@ plot_fixation_proportions <- function(hungry_data, sated_data, fixation_type = c
     geom_hline(yintercept = 0.25, color = "black",linetype = "dashed") +
     xlab(x_lab) +
     ylab("Proportion") +
-    ggtitle("") +
+    #ggtitle("") +
     ylim(0, 1) +
     scale_fill_manual(values = c("sated" = "cornflowerblue", "hungry" = "gold")) +
     myTheme + 
-    scale_x_discrete(labels = custom_labels)
+    scale_x_discrete(labels = custom_labels)+
+    theme(legend.position="none")
 
   return(plot)
 }
@@ -397,25 +511,25 @@ p1 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_loc =
   sated_data = list(first_fix_social_sated_loc = first_fix_social_sated_loc,last_fix_social_sated_loc = last_fix_social_sated_loc),fixation_type = "first",plot_type = "location", custom_labels = location_labels
 )
 p1
-ggsave("prop_firstfix_loc_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+ggsave("prop_firstfix_loc_social.png", p1,  width = 7, height = 7, dpi = 300)
 
 p2 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_loc = first_fix_social_hungry_loc,last_fix_social_hungry_loc = last_fix_social_hungry_loc),
   sated_data = list(first_fix_social_sated_loc = first_fix_social_sated_loc,last_fix_social_sated_loc = last_fix_social_sated_loc),fixation_type = "last",plot_type = "location", custom_labels = location_labels
 )
 p2
-ggsave("prop_lastfix_loc_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+ggsave("prop_lastfix_loc_social.png", p2, width = 7, height = 7, dpi = 300)
 
 p3 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_cat = first_fix_social_hungry_cat,last_fix_social_hungry_cat = last_fix_social_hungry_cat),
   sated_data = list(first_fix_social_sated_cat = first_fix_social_sated_cat,last_fix_social_sated_cat = last_fix_social_sated_cat),fixation_type = "first",plot_type = "category", custom_labels = category_labels
 )
 p3
-ggsave("prop_firstfix_cat_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+ggsave("prop_firstfix_cat_social.png", p3,  width = 7, height = 7, dpi = 300)
 
 p4 <- plot_fixation_proportions(hungry_data = list(first_fix_social_hungry_cat = first_fix_social_hungry_cat,last_fix_social_hungry_cat = last_fix_social_hungry_cat),
   sated_data = list(first_fix_social_sated_cat = first_fix_social_sated_cat,last_fix_social_sated_cat = last_fix_social_sated_cat),fixation_type = "last",plot_type = "category", custom_labels = category_labels
 )
 p4
-ggsave("prop_lastfix_cat_social.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+ggsave("prop_lastfix_cat_social.png", p4, width = 7, height = 7, dpi = 300)
 ```
 
 
@@ -482,7 +596,7 @@ trans_h2 <- data_trans %>%
   group_by(subject) %>%
   mutate(prop = count / sum(count),
          std_error = sqrt(prop * (1 - prop) / sum(count))) %>%
-  select(subject, transition, prop, std_error)
+  dplyr::select(subject, transition, prop, std_error)
 trans_h2$condition<- 'hungry'
 
 trans_s2 <- data_transs %>%
@@ -491,7 +605,7 @@ trans_s2 <- data_transs %>%
   group_by(subject) %>%
   mutate(prop = count / sum(count),
          std_error = sqrt(prop * (1 - prop) / sum(count))) %>%
-  select(subject, transition, prop, std_error)
+  dplyr::select(subject, transition, prop, std_error)
 trans_s2$condition<- 'sated'
 
 
@@ -510,7 +624,7 @@ box_plot<- ggplot(data = trans, aes(x = transition, y = prop, fill = condition))
   ylim(0, 1)+
   myTheme
 box_plot
-ggsave("average_transitions2.png", width = 8, height = 6, plot = last_plot(), dpi = 300)
+ggsave("average_transitions2.png", width = 9, height = 7, plot = last_plot(), dpi = 300)
 
 ```
 ... Relevant stats
@@ -557,126 +671,95 @@ trans_filled %>%
 
 ## No differences between conditions
 ```
-## 3 Discount
-### 2.1 choose impulsive given dwell time
-```{r}
-data_discount_combined<-data_discount_combined %>% 
-  dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
-
-# #recode time/value 
-data_discount_combined$dwelldiff_time <- 0
-for (i in 1:nrow(data_discount_combined)){
-  if((data_discount_combined$choice2[i]==1) && (data_discount_combined$response2[i]==1)) { # time & left
-    data_discount_combined$dwelldiff_time[i] = (data_discount_combined$timeleft_time[i]+data_discount_combined$valueleft_time[i])-(data_discount_combined$timeright_time[i]+data_discount_combined$valueright_time[i])
-  }else if ((data_discount_combined$choice2[i]==1) && (data_discount_combined$response2[i]==0)) { # time & right
-    data_discount_combined$dwelldiff_time[i] = (data_discount_combined$timeright_time[i]+data_discount_combined$valueright_time[i])-(data_discount_combined$timeleft_time[i]+data_discount_combined$valueleft_time[i])
-  }else if ((data_discount_combined$choice2[i]==0) && (data_discount_combined$response2[i]==1)) { # value & left
-    data_discount_combined$dwelldiff_time[i] = (data_discount_combined$timeright_time[i]+data_discount_combined$valueright_time[i])-(data_discount_combined$timeleft_time[i]+data_discount_combined$valueleft_time[i])
-  }else if ((data_discount_combined$choice2[i]==0) && (data_discount_combined$response2[i]==0)) { # value & right
-    data_discount_combined$dwelldiff_time[i] = (data_discount_combined$timeleft_time[i]+data_discount_combined$valueleft_time[i])-(data_discount_combined$timeright_time[i]+data_discount_combined$valueright_time[i])
-  }
-} 
-
-# Define the bin edges
-bin_edges <- c(-Inf, -700, -500, -300, -100, 100, 300, 500, 700, Inf)
-
-data_discount_combined$bin2 <- cut(data_discount_combined$dwelldiff_time, breaks = bin_edges,
-                                labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", 
-                                            ">700"),
-                                include.lowest = TRUE, right = FALSE)
-
-```
+## 4 Discount
+### 4.1 choose impulsive given dwell time
 
 ```{r}
-# Calculate the mean probability and standard error for each bin
-summary_time <- data_discount_combined %>%
-  mutate(bin2 = cut(dwelldiff_time, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
-  group_by(bin2, condition) %>%
-  summarise(mean_prob_time = mean(choice2),
-            std_error_time = sd(choice2) / sqrt(n()))
-
-
-p1 <- ggplot(summary_time, aes(x = bin2, y = mean_prob_time, color = condition, group = condition)) +
-  geom_smooth(aes(y = mean_prob_time, fill = condition), method = "loess", span = 0.75, se = TRUE, linetype = "solid", alpha=0.3) +
+p1 <- ggplot(data_combined_discount2, aes(x =(dwelldiff_impatient_rel), y = choice2, color = condition, fill=condition)) +
+    geom_smooth(method = "glm", method.args = list(family=binomial), se = TRUE, 
+              aes(fill = condition), alpha = 0.3) +
   scale_color_manual(values = c("gold", "cornflowerblue")) +
   scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
-  labs(x = "Dwell Time Difference", y = "P(Impatient Choice)") +
+  labs(x = expression(bold(paste("DT", Delta, "(option"[paste("impatient")], " - option"[paste("patient")], ")"))), y = "P(Impatient Choice)") +
   geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
+  geom_vline(xintercept = 0.5, color = "black", linetype = "dashed") +  
   ylim(0,1)+
-  myTheme
-ggsave("pchoice_dwelltime_discount.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
+  myTheme+
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+ggsave("pchoice_dwelltime_social.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 p1
+
+```
+
+
+```{r}
+discount_model4 <- glmer(choice2~condition + scale(dwelldiff_impatient_rel) +scale(rel_dwelldiff_delay) + (1+condition+scale(rel_dwelldiff_delay)|subject), data=data_combined_discount2, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+
 ```
 
 ```{r}
-# #recode ngo/value 
-data_discount_combined$dwelldiff_time_time <- data_discount_combined$timeleft_time+data_discount_combined$timeright_time - data_discount_combined$valueleft_time+data_discount_combined$valueright_time 
+# Create prediction data frame with a reference subject
+reference_subject2 <- data_combined_discount2$subject[1]
 
-data_discount_combined$dwelldiff_time_amount <- data_discount_combined$valueleft_time+data_discount_combined$valueright_time -data_discount_combined$timeleft_time+data_discount_combined$timeright_time 
+pred_data2 <- expand.grid(
+  rel_dwelldiff_delay = seq(-1, 1, length.out = 100),
+  condition = c("hungry", "sated"),
+  dwelldiff_impatient_rel = mean(data_combined_discount2$dwelldiff_impatient_rel, na.rm = TRUE),
+  subject = reference_subject2
+)
 
-# To get both in one summary:
-data_discount_combined %>%
-  group_by(condition) %>%
-  summarize(
-    # Time differences
-    mean_time = mean(dwelldiff_time_time),
-    max_time = max(dwelldiff_time_time),
-    min_time = min(dwelldiff_time_time),
-    # Amount differences
-    mean_amount = mean(dwelldiff_time_amount),
-    max_amount = max(dwelldiff_time_amount),
-    min_amount = min(dwelldiff_time_amount)
-  )
+# Get predictions using only fixed effects (ignoring the random effects)
+pred_intervals2 <- merTools::predictInterval(discount_model4, newdata = pred_data2, 
+                                 level = 0.95, n.sims = 5000,
+                                 type = "probability", which = "fixed")
 
-#THINK ABOUT BINNING!
-```
+pred_data2$predicted <- pred_intervals2$fit
+pred_data2$lower <- pred_intervals2$lwr
+pred_data2$upper <- pred_intervals2$upr
+pred_data2$se <- sqrt(pred_data2$predicted * (1 - pred_data2$predicted) / n)
 
-```{r}
-# Calculate the mean probability and standard error for each bin
-summary_amount <- data_discount_combined %>%
-  mutate(bin2 = cut(dwelldiff_time_time, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
-  group_by(bin2, condition) %>%
-  summarise(mean_prob_time = mean(choice2),
-            std_error_time = sd(choice2) / sqrt(n()))
-
-
-p2 <- ggplot(summary_amount, aes(x = bin2, y = mean_prob_time, color = condition, group = condition)) +
-  geom_smooth(aes(y = mean_prob_time, fill = condition), method = "loess", span = 0.75, se = TRUE, linetype = "solid", alpha=0.3) +
+# Create plot
+ggplot(pred_data2, aes(x = rel_dwelldiff_delay, y = predicted, color = condition)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = predicted-se, ymax = predicted+se, fill = condition), 
+              alpha = 0.2, color = NA) +
   scale_color_manual(values = c("gold", "cornflowerblue")) +
-  scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
-  labs(x = "Dwell Time Difference Time vs Amount", y = "P(Impatient Choice)") +
-  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = "0", color = "black", linetype = "dashed") +  
-  ylim(0,1)+
-  myTheme
-ggsave("pchoice_dwelltime_amountvstime.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
-p2
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +
+  labs(x = expression(bold(paste("DT", Delta, "(attribute"[paste("delay")], " - attribute"[paste("amount")], ")"))), y = "P(Impatient Choice)") +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  ylim(0,1) +
+  myTheme+
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+
+ggsave("attributedt_choice_discount.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 ```
 
 
-
-### 2.2 Plot more attention to time attribute under hunger?
+### 4.2 Plot more attention to delay attribute under hunger?
 ```{r}
-data_discount_combined$att_time<-0
-for (n in 1:nrow(data_discount_combined)) {
-  data_discount_combined$att_value[n] <- (data_discount_combined$valueleft_time[n] + data_discount_combined$valueright_time[n]) /
-                (sum(data_discount_combined$timeleft_time[n] + data_discount_combined$timeright_time[n] +
-                    data_discount_combined$valueleft_time[n] + data_discount_combined$valueright_time[n]))
+data_combined_discount2$att_time<-0
+for (n in 1:nrow(data_combined_discount2)) {
+  data_combined_discount2$att_amount[n] <- (data_combined_discount2$amountleft_time[n] + data_combined_discount2$amountright_time[n]) /
+                (sum(data_combined_discount2$delayleft_time[n] + data_combined_discount2$delayright_time[n] +
+                    data_combined_discount2$amountleft_time[n] + data_combined_discount2$amountright_time[n]))
 }
 
 #delete NA trials
-data_discount_combined3 <- subset(data_discount_combined,att_value!='NaN')
+data_combined_discount3 <- subset(data_combined_discount2,att_amount!='NaN')
 
-combined_summary <- data_discount_combined3 %>%
+combined_summary <- data_combined_discount3 %>%
   group_by(subject, condition) %>%
-  summarise(mean_att_value = mean(att_value),
-            std_error = sd(att_value) / sqrt(n()))
+  summarise(mean_att_amount = mean(att_amount),
+            std_error = sd(att_amount) / sqrt(n()))
 
 library(ggdist)
 
 # Create a raincloud plot
-raincloud_plot <- ggplot(combined_summary, aes(x = condition, y = mean_att_value, fill = condition)) +
+raincloud_plot <- ggplot(combined_summary, aes(x = condition, y = mean_att_amount, fill = condition)) +
   geom_violin(trim = FALSE, alpha = 0.8) +
   #geom_boxplot(width = 0.1, fill = "white", color = "black", outlier.shape = NA) +
   geom_point(position = position_jitter(width = 0.15), size = 1) +
@@ -699,33 +782,57 @@ ggsave("dwelltime_self_cond_discount.png", width = 7, height = 7, plot = last_pl
 stats...
 ```{r}
 #diff between conditions
-att_value_h<-subset(combined_summary, condition =='hungry')
-att_value_s<-subset(combined_summary, condition =='sated')
+att_amount_h<-subset(combined_summary, condition =='hungry')
+att_amount_s<-subset(combined_summary, condition =='sated')
 
-ttest<-t.test(att_value_h$mean_att_value, att_value_s$mean_att_value, paired=TRUE)
+ttest<-t.test(att_amount_h$mean_att_amount, att_amount_s$mean_att_amount, paired=TRUE)
 ttest
 
 effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
 
 #different that .5?
-ttest_h <- t.test(att_value_h$mean_att_value, mu = 0.5)
+ttest_h <- t.test(att_amount_h$mean_att_amount, mu = 0.5)
 ttest_h
 
-# Conduct a one-sample t-test for the second condition (att_value_s)
-ttest_s <- t.test(att_value_s$mean_att_value, mu = 0.5)
+# Conduct a one-sample t-test for the second condition (att_amount_s)
+ttest_s <- t.test(att_amount_s$mean_att_amount, mu = 0.5)
 ttest_s
 # no difference between conditions, but participants spent significantly more time on the time attribute in both conditions!
 ```
 
-### 3.3 Lets take a look at first and last fixations
+```{r}
+combined_summary_discount <- data_combined_discount2 %>%
+  group_by(subject, condition) %>%
+  summarise(mean_att_option = mean(dwelldiff_impatient_rel),
+            mean_att_attribute = mean(rel_dwelldiff_delay))
+
+
+
+ttest4<-t.test(combined_summary_discount$mean_att_option[combined_summary_discount$condition == "hungry"], combined_summary_discount$mean_att_option[combined_summary_discount$condition == "sated"], paired=TRUE)
+ttest4
+
+effect_size_tt4 <- ttest4$statistic / sqrt(ttest4$parameter)
+effect_size_tt4
+
+ttest5<-t.test(combined_summary_discount$mean_att_attribute[combined_summary_discount$condition == "hungry"], combined_summary_discount$mean_att_attribute[combined_summary_discount$condition == "sated"], paired=TRUE)
+ttest5
+
+effect_size_tt5 <- ttest5$statistic / sqrt(ttest5$parameter)
+effect_size_tt5
+```
+
+''''''*2wÄ
+
+
+### 4.3 Lets take a look at first and last fixations
 Function to categorise where (location and content participants looked when)
 ```{r}
 data_discount_hungry_long_w0<-data_discount_hungry_long
-data_discount_sated_long_w0<-data_discount_hungry_long
+data_discount_sated_long_w0<-data_discount_sated_long
 data_discount_hungry_long<-subset(data_discount_hungry_long, fixElement != 0)
 data_discount_sated_long<-subset(data_discount_sated_long, fixElement != 0)
 ```
-#### 2.3.1 Recode for position
+#### 4.3.1 Recode for position
 ```{r}
 #Fixated Element code
 #1 = time left
@@ -734,10 +841,10 @@ data_discount_sated_long<-subset(data_discount_sated_long, fixElement != 0)
 #4 = amount right
 
 is_even <- function(x) {
-  x %% 2 == 0
+  x %% 2 == 1
 }
 
-# recoding function for position (even subjects saw value on upper side of screen and time on lower side, while odd subjects the other way around)
+# recoding function for position (odd subjects saw value on upper side of screen and time on lower side, while odd subjects the other way around)
 recode_fixation2 <- function(fixElement, subject) {
   ifelse(
     is_even(subject),
@@ -752,7 +859,7 @@ recode_fixation2 <- function(fixElement, subject) {
   )
 }
 
-# Apply to dataframes, such that 
+# Apply to dataframes, such that
 #fixElement2 code
 #1 = upper left
 #2 = upper right
@@ -775,7 +882,7 @@ grouped_discount_data_hungry <- data_discount_hungry_long %>%
 # Extract the first fixated element for each trial
 first_fix_discount_hungry <- grouped_discount_data_hungry %>%
   slice(1) %>%
-  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+  dplyr::select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
 
 #category
 first_fix_discount_hungry_cat<-first_fix_discount_hungry %>%
@@ -794,7 +901,7 @@ first_fix_discount_hungry_loc<-first_fix_discount_hungry %>%
 # Extract the last fixated element for each trial
 last_fix_discount_hungry <- grouped_discount_data_hungry %>%
   slice(n()) %>%
-  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+  dplyr::select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
 
 #category
 last_fix_discount_hungry_cat<-last_fix_discount_hungry %>%
@@ -821,7 +928,7 @@ grouped_discount_data_sated <- data_discount_sated_long %>%
 # Extract the first fixated element for each trial
 first_fix_discount_sated <- grouped_discount_data_sated %>%
   slice(1) %>%
-  select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+  dplyr::select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
 
 #category
 first_fix_discount_sated_cat<-first_fix_discount_sated %>%
@@ -840,7 +947,7 @@ first_fix_discount_sated_loc<-first_fix_discount_sated %>%
 # Extract the last fixated element for each trial
 last_fix_discount_sated <- grouped_discount_data_sated %>%
   slice(n()) %>%
-  select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+  dplyr::select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
 
 #category
 last_fix_discount_sated_cat<-last_fix_discount_sated %>%
@@ -859,31 +966,31 @@ last_fix_discount_sated_loc<-last_fix_discount_sated %>%
 
 ```{r}
 location_labels <- c("1" ="upper left","2" ="upper right", "3" ="lower left","4" ="lower right")
-category_labels <- c("1" = "time left", "2" = "time right", "3" = "amount left", "4" = "amount right")
+category_labels <- c("1" = "amount left", "2" = "amount right", "3" = "delay left", "4" = "delay right")
 
-p1 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_loc = first_fix_discount_hungry_loc,last_fix_discount_hungry_loc = last_fix_discount_hungry_loc),
+p5 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_loc = first_fix_discount_hungry_loc,last_fix_discount_hungry_loc = last_fix_discount_hungry_loc),
   sated_data = list(first_fix_discount_sated_loc = first_fix_discount_sated_loc,last_fix_discount_sated_loc = last_fix_discount_sated_loc),fixation_type = "first",plot_type = "location", custom_labels = location_labels
 )
-p1
-ggsave("prop_firstfix_loc_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+p5
+ggsave("prop_firstfix_loc_discount.png", p5, width = 7, height = 7, dpi = 300)
 
-p2 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_loc = first_fix_discount_hungry_loc,last_fix_discount_hungry_loc = last_fix_discount_hungry_loc),
+p6 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_loc = first_fix_discount_hungry_loc,last_fix_discount_hungry_loc = last_fix_discount_hungry_loc),
   sated_data = list(first_fix_discount_sated_loc = first_fix_discount_sated_loc,last_fix_discount_sated_loc = last_fix_discount_sated_loc),fixation_type = "last",plot_type = "location", custom_labels = location_labels
 )
-p2
-ggsave("prop_lastfix_loc_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+p6
+ggsave("prop_lastfix_loc_discount.png", p6, width = 7, height = 7, dpi = 300)
 
-p3 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_cat = first_fix_discount_hungry_cat,last_fix_discount_hungry_cat = last_fix_discount_hungry_cat),
+p7 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_cat = first_fix_discount_hungry_cat,last_fix_discount_hungry_cat = last_fix_discount_hungry_cat),
   sated_data = list(first_fix_discount_sated_cat = first_fix_discount_sated_cat,last_fix_discount_sated_cat = last_fix_discount_sated_cat),fixation_type = "first",plot_type = "category", custom_labels = category_labels
 )
-p3
-ggsave("prop_firstfix_cat_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+p7
+ggsave("prop_firstfix_cat_discount.png", p7, width = 7, height = 7, dpi = 300)
 
-p4 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_cat = first_fix_discount_hungry_cat,last_fix_discount_hungry_cat = last_fix_discount_hungry_cat),
+p8 <- plot_fixation_proportions(hungry_data = list(first_fix_discount_hungry_cat = first_fix_discount_hungry_cat,last_fix_discount_hungry_cat = last_fix_discount_hungry_cat),
   sated_data = list(first_fix_discount_sated_cat = first_fix_discount_sated_cat,last_fix_discount_sated_cat = last_fix_discount_sated_cat),fixation_type = "last",plot_type = "category", custom_labels = category_labels
 )
-p4
-ggsave("prop_lastfix_cat_discount.png", width = 7, height = 7,plot = last_plot(), dpi = 300)
+p8
+ggsave("prop_lastfix_cat_discount.png", p8, width = 7, height = 7, dpi = 300)
 ```
 
 
@@ -912,7 +1019,7 @@ trans_h2 <- data_trans %>%
   group_by(subject) %>%
   mutate(prop = count / sum(count),
          std_error = sqrt(prop * (1 - prop) / sum(count))) %>%
-  select(subject, transition, prop, std_error)
+  dplyr::select(subject, transition, prop, std_error)
 trans_h2$condition<- 'hungry'
 
 trans_s2 <- data_transs %>%
@@ -921,7 +1028,7 @@ trans_s2 <- data_transs %>%
   group_by(subject) %>%
   mutate(prop = count / sum(count),
          std_error = sqrt(prop * (1 - prop) / sum(count))) %>%
-  select(subject, transition, prop, std_error)
+  dplyr::select(subject, transition, prop, std_error)
 trans_s2$condition<- 'sated'
 
 
@@ -940,15 +1047,238 @@ box_plot<- ggplot(data = trans, aes(x = transition, y = prop, fill = condition))
   ylim(0, 1)+
   myTheme
 box_plot
-ggsave("average_transitions_discount.png", width = 8, height = 6, plot = last_plot(), dpi = 300)
+ggsave("average_transitions_discount.png", width = 9, height = 7, plot = last_plot(), dpi = 300)
 
 ```
-### Check overall fix props
-```{r}
-data_social_hungry$fixprob_selfleft <- data_social_hungry$selfleft_time/(data_social_hungry$selfleft_time + data_social_hungry$selfright_time + data_social_hungry$ngoleft_time + data_social_hungry$ngoright_time)
-mean(data_social_hungry$fixprob_selfleft,na.rm = TRUE)
 
-data_social_hungry$fixprob_selfright <- data_social_hungry$selfright_time/(data_social_hungry$selfleft_time + data_social_hungry$selfright_time + data_social_hungry$ngoleft_time + data_social_hungry$ngoright_time)
-mean(data_social_hungry$fixprob_selfright,na.rm = TRUE)
+
+### First and last Fixations food
+
+### 2.3 Lets take a look at first and last fixations
+```{r}
+nsubj <- length(unique(data_combined2$subject))
+data_hungry_long_w0<-data_hungry_long
+data_sated_long_w0<-data_sated_long
+data_hungry_long<-subset(data_hungry_long, fixElement != 0)
+data_sated_long<-subset(data_sated_long, fixElement != 0)
+```
+#### 2.3.1 Recode for position
+```{r}
+#Fixated Element code
+#1 = food left
+#2 = food right
+#3 = nutri left
+#4 = nutri right
+
+is_odd <- function(x) {
+  x %% 2 == 1
+}
+
+# recoding function for position (even subjects saw self on upper side of screen and ngo on lower side, while odd subjects the other way around)
+recode_fixation <- function(fixElement, subject) {
+  ifelse(
+    is_odd(x=subject), # For odd subjects, apply the recoding; For even subjects, keep the original fixElement
+    dplyr::case_when(
+      fixElement == 1 ~ 3,
+      fixElement == 2 ~ 4,
+      fixElement == 3 ~ 1,
+      fixElement == 4 ~ 2,
+      TRUE ~ fixElement
+    ),
+    fixElement  # Return original value for even subjects
+  )
+}
+
+# Apply to dataframes, such that 
+#fixElement2 code
+#1 = upper left
+#2 = upper right
+#3 = lower left
+#4 = lower right
+
+# Apply to dataframes using subject column
+data_hungry_long$fixElement2 <- recode_fixation(data_hungry_long$fixElement,data_hungry_long$subject)
+
+data_sated_long$fixElement2 <- recode_fixation(data_sated_long$fixElement,data_sated_long$subject)
+
+```
+
+#### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
+##### 2.3.2.1 hungry
+```{r}
+library("dplyr")
+# Group the data by trial and subject
+grouped_data_hungry <- data_hungry_long %>%
+  group_by(trial, subject)
+
+# a) First Fix
+# Extract the first fixated element for each trial
+first_fix_hungry <- grouped_data_hungry %>%
+  slice(1) %>%
+  dplyr::select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+
+#category
+first_fix_hungry_cat<-first_fix_hungry %>%
+  group_by(first_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+#location
+first_fix_hungry_loc<-first_fix_hungry %>%
+  group_by(first_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+
+# b) Last Fix
+# Extract the last fixated element for each trial
+last_fix_hungry <- grouped_data_hungry %>%
+  slice(n()) %>%
+  dplyr::select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+
+#category
+last_fix_hungry_cat<-last_fix_hungry %>%
+  group_by(last_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+#location
+last_fix_hungry_loc<-last_fix_hungry %>%
+  group_by(last_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_social_hungry), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "hungry")
+
+```
+
+##### 2.3.2.2 sated
+```{r}
+# Group the data by trial and subject
+grouped_data_sated <- data_sated_long %>%
+  group_by(trial, subject)
+
+# a) First Fix
+# Extract the first fixated element for each trial
+first_fix_sated <- grouped_data_sated %>%
+  slice(1) %>%
+  dplyr::select(trial, first_element_cat = fixElement, first_element_loc = fixElement2)
+
+#category
+first_fix_sated_cat<-first_fix_sated %>%
+  group_by(first_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+#location
+first_fix_sated_loc<-first_fix_sated %>%
+  group_by(first_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(first_fix_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+
+# b) Last Fix
+# Extract the last fixated element for each trial
+last_fix_sated <- grouped_data_sated %>%
+  slice(n()) %>%
+  dplyr::select(trial, response, last_element_cat = fixElement, last_element_loc = fixElement2)
+
+#category
+last_fix_sated_cat<-last_fix_sated %>%
+  group_by(last_element_cat) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+#location
+last_fix_sated_loc<-last_fix_sated %>%
+  group_by(last_element_loc) %>%
+  summarise(n = n(), fix_prop = n/nrow(last_fix_sated), 
+            se_prop = sqrt((fix_prop * (1 - fix_prop)) / nsubj),
+            condition = "sated")
+
+```
+
+```{r}
+location_labels <- c("1" ="upper left","2" ="upper right", "3" ="lower left","4" ="lower right")
+category_labels <- c("1" = "food left", "2" = "food right", "3" = "nutri left", "4" = "nutri right")
+
+p9 <- plot_fixation_proportions(hungry_data = list(first_fix_hungry_loc = first_fix_hungry_loc,last_fix_hungry_loc = last_fix_hungry_loc),
+  sated_data = list(first_fix_sated_loc = first_fix_sated_loc,last_fix_sated_loc = last_fix_sated_loc),fixation_type = "first",plot_type = "location", custom_labels = location_labels
+)
+p9
+ggsave("prop_firstfix_loc_food.png", p9, width = 7, height = 7, dpi = 300)
+
+p10 <- plot_fixation_proportions(hungry_data = list(first_fix_hungry_loc = first_fix_hungry_loc,last_fix_hungry_loc = last_fix_hungry_loc),
+  sated_data = list(first_fix_sated_loc = first_fix_sated_loc,last_fix_sated_loc = last_fix_sated_loc),fixation_type = "last",plot_type = "location", custom_labels = location_labels
+)
+p10
+ggsave("prop_lastfix_loc_food.png", p10, width = 7, height = 7, dpi = 300)
+
+p11 <- plot_fixation_proportions(hungry_data = list(first_fix_hungry_cat = first_fix_hungry_cat,last_fix_hungry_cat = last_fix_hungry_cat),
+  sated_data = list(first_fix_sated_cat = first_fix_sated_cat,last_fix_sated_cat = last_fix_sated_cat),fixation_type = "first",plot_type = "category", custom_labels = category_labels
+)
+p11
+ggsave("prop_firstfix_cat_food.png", p11, width = 7, height = 7, dpi = 300)
+
+p12 <- plot_fixation_proportions(hungry_data = list(first_fix_hungry_cat = first_fix_hungry_cat,last_fix_hungry_cat = last_fix_hungry_cat),
+  sated_data = list(first_fix_sated_cat = first_fix_sated_cat,last_fix_sated_cat = last_fix_sated_cat),fixation_type = "last",plot_type = "category", custom_labels = category_labels
+)
+p12
+ggsave("prop_lastfix_cat_food.png", p12, width = 7, height = 7, dpi = 300)
+```
+
+```{r}
+data_hungry_long <- create_fixation_transitions(data_hungry_long)
+data_sated_long <- create_fixation_transitions(data_sated_long)
+## HUNGRY
+# check proportion transitions
+## exclude remain trials
+data_trans <- subset(data_hungry_long, transition!='remain')
+data_trans <- subset(data_trans, transition!='NA')
+data_trans$condition<- 'hungry'
+counts_trans <- table(data_trans$transition)
+## SATED
+# check proportion transitions
+## exclude remain trials
+data_transs <- subset(data_sated_long, transition!='remain')
+data_transs <- subset(data_transs, transition!='NA')
+counts_transs <- table(data_transs$transition)
+data_transs$condition <- 'sated'
+
+trans_h2 <- data_trans %>%
+  group_by(subject, transition) %>%
+  summarise(count = n()) %>%
+  group_by(subject) %>%
+  mutate(prop = count / sum(count),
+         std_error = sqrt(prop * (1 - prop) / sum(count))) %>%
+  dplyr::select(subject, transition, prop, std_error)
+trans_h2$condition<- 'hungry'
+
+trans_s2 <- data_transs %>%
+  group_by(subject, transition) %>%
+  summarise(count = n()) %>%
+  group_by(subject) %>%
+  mutate(prop = count / sum(count),
+         std_error = sqrt(prop * (1 - prop) / sum(count))) %>%
+  dplyr::select(subject, transition, prop, std_error)
+trans_s2$condition<- 'sated'
+
+
+trans_h2 <- subset(trans_h2, subject %in% trans_s2$subject)
+trans_s2 <- subset(trans_s2, subject %in% trans_h2$subject)
+
+trans<-rbind(trans_h2, trans_s2)
+
+box_plot<- ggplot(data = trans, aes(x = transition, y = prop, fill = condition)) +
+  geom_boxplot(position = position_dodge(width = 0.75)) +
+  #geom_hline(yintercept = 0, color = "red") +
+  xlab("Transition Type") +
+  ylab("Proportion") +
+  #ggtitle("Payne index across conditions") +
+  scale_fill_manual(values = c("sated" = "cornflowerblue", "hungry" = "gold"))+
+  ylim(0, 1)+
+  myTheme
+box_plot
+ggsave("average_transitions_food.png", width = 9, height = 7, plot = last_plot(), dpi = 300)
+
 ```
 

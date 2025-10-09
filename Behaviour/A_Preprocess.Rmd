@@ -827,6 +827,12 @@ sd(trialc$trialnr)
 ```
 #### 4.2 Social
 ```{r}
+#participant nr 40 missing in food data (exclude here for comparability)
+data_social_hungry<-subset(data_social_hungry, subject != 40)
+data_social_sated<-subset(data_social_sated, subject != 40)
+data_social_hungry_long<-subset(data_social_hungry_long, subject != 40)
+data_social_sated_long<-subset(data_social_sated_long, subject != 40)
+
 # 1 In line with preregistration (https://osf.io/tmdw3) exclude trials:
 # a) RT smaller than 250ms
 data_social_hungry<-subset(data_social_hungry, RT>250)
@@ -903,6 +909,12 @@ data_social_combined <- data_social_combined %>%
 
 #### 4.3 Discount
 ```{r}
+#participant nr 40 missing in food data (exclude here for comparability)
+data_discount_hungry<-subset(data_discount_hungry, subject != 40)
+data_discount_sated<-subset(data_discount_sated, subject != 40)
+data_discount_hungry_long<-subset(data_discount_hungry_long, subject != 40)
+data_discount_sated_long<-subset(data_discount_sated_long, subject != 40)
+
 # 1 In line with preregistration (https://osf.io/tmdw3) exclude trials:
 # a) RT smaller than 250ms
 data_discount_hungry<-subset(data_discount_hungry, RT>250)
