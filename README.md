@@ -2,6 +2,10 @@
 
 This is the repository where I am storing the code used to generate **1 behavioural** and **2 modeling** analyses for the manuscript: "Domain Specific Effects of Hunger on Attention and Choice"
 
+### Data
+
+Given size, all data is stored on Zenodo: 
+
 ## 1 Behavioual Analyses
 
 All analyses are carried out in R using RMarkdown (Version 4.4.1). The analyses are structured using the suffix A_ to D_ and at the beginning of each file further information about the analyses is provided.
