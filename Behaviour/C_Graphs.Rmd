@@ -2,10 +2,11 @@
 title: "Additional Graphs"
 output: html_document
 date: "2024-10-08"
+author: Jennifer March (jennifer.march@uni-hamburg.de)
 ---
 
 ### Information
-This script creates the quantile plots and VD plots.
+This script creates the quantile plots and VD plot and assess success of manipulation
 **Requirements** had_data.RData; had_data_2.RData (in data folder from this git repository: https://github.com/JenniferMarch/Hunger_across_domains)
 
 ### 1 Preparation
@@ -321,3 +322,129 @@ ggsave("impatient_rt.png", imp_graphs$rt_plot, width = 8, height = 6)
 ggsave("patient_choice.png", pat_graphs$choice_plot, width = 8, height = 6)
 ggsave("patient_rt.png", pat_graphs$rt_plot, width = 8, height = 6)
 ```
+### 4 Manipulation check
+
+```{r}
+sum_data <- data_combined2 %>%
+  group_by(condition, subject) %>%
+  summarise(hs0 = mean(hs0), 
+            hs1 = mean(hs1),
+            hs2 = mean(hs2),
+            hs3 = mean(hs3), 
+            pa0 = mean(p0_PA), 
+            pa1 = mean(p1_PA),
+            pa2 = mean(p2_PA),
+            pa3 = mean(p3_PA),
+            na0 = mean(p0_NA), 
+            na1 = mean(p1_NA),
+            na2 = mean(p2_NA),
+            na3 = mean(p3_NA),
+            )
+alpha_adjusted <- 0.05 / 3
+alpha_adjusted
+
+alpha_adjusted2 <- 0.05 / 2
+alpha_adjusted2
+
+# exclude NAs
+sum_data <- sum_data %>%
+  filter(!(is.na(hs0) & condition == "sated"))
+
+#exclude participants where I only have data in one condition
+sum_data <- sum_data %>%
+  group_by(subject) %>%
+  filter(n_distinct(condition) == 2) %>%
+  ungroup()
+
+
+#difference at lab arrival?
+hs_t0 <- t.test(sum_data$hs0[sum_data$condition=="sated"], sum_data$hs1[sum_data$condition=="hungry"], paired=FALSE)
+hs_t0
+es_t0 <- (hs_t0$statistic * sqrt(sum(sum_data$condition == "sated") + sum(sum_data$condition == "hungry"))) / sqrt(sum(sum_data$condition == "sated") * sum(sum_data$condition == "hungry"))
+es_t0
+#difference after shake?
+hs_shake <- t.test(sum_data$hs0[sum_data$condition=="sated"], sum_data$hs1[sum_data$condition=="sated"], paired=TRUE)
+hs_shake
+hs_shake2 <- t.test(sum_data$hs1[sum_data$condition=="sated"], sum_data$hs0[sum_data$condition=="sated"], paired=TRUE)
+hs_shake2
+
+es_shake<- hs_shake$statistic / sqrt(hs_shake$parameter)
+es_shake
+# increase in hunger hungry condition?
+hs_hungry <- t.test(sum_data$hs1[sum_data$condition=="hungry"], sum_data$hs3[sum_data$condition=="hungry"], paired=TRUE)
+hs_hungry
+es_hungry<- hs_hungry$statistic / sqrt(hs_hungry$parameter)
+es_hungry
+
+# same tests for mood (positive)
+#difference at lab arrival?
+pa_t0 <- t.test(sum_data$pa0[sum_data$condition=="sated"], sum_data$pa1[sum_data$condition=="hungry"], paired=FALSE)
+pa_t0
+es_pa0 <- (pa_t0$statistic * sqrt(sum(sum_data$condition == "sated") + sum(sum_data$condition == "hungry"))) / sqrt(sum(sum_data$condition == "sated") * sum(sum_data$condition == "hungry"))
+es_pa0
+#difference after shake?
+pa_shake <- t.test(sum_data$pa0[sum_data$condition=="sated"], sum_data$pa1[sum_data$condition=="sated"], paired=TRUE)
+pa_shake
+es_pa_shake<- pa_shake$statistic / sqrt(pa_shake$parameter)
+es_pa_shake
+
+#... and negative 
+#difference at lab arrival?
+na_t0 <- t.test(sum_data$na0[sum_data$condition=="sated"], sum_data$na1[sum_data$condition=="hungry"], paired=FALSE)
+na_t0
+es_na0 <- (na_t0$statistic * sqrt(sum(sum_data$condition == "sated") + sum(sum_data$condition == "hungry"))) / sqrt(sum(sum_data$condition == "sated") * sum(sum_data$condition == "hungry"))
+es_na0
+#difference after shake?
+na_shake <- t.test(sum_data$na0[sum_data$condition=="sated"], sum_data$na1[sum_data$condition=="sated"], paired=TRUE)
+na_shake
+es_na_shake<- na_shake$statistic / sqrt(na_shake$parameter)
+es_na_shake
+
+
+sum_data_long <- sum_data %>%
+  pivot_longer(
+    cols = matches("^(hs|pa|na)\\d+$"),  # matches hs0, hs1, pa0, pa1, na0, na1, etc.
+    names_to = c(".value", "timepoint"),
+    names_pattern = "(hs|pa|na)(\\d+)"
+  ) %>%
+  mutate(timepoint = as.integer(timepoint))
+
+
+
+```
+plottings
+```{r}
+sum_data_long <- sum_data_long %>%
+  filter(!is.na(hs))
+sum_data_long$timepoint2 <- ifelse(sum_data_long$condition == "hungry" & sum_data_long$timepoint == 1, 0,sum_data_long$timepoint)
+
+
+ggplot(sum_data_long, aes(x = as.factor(timepoint2), y = hs, color = condition)) +
+  geom_boxplot(position = position_dodge2(width = 0.75, preserve = "single")) +
+  labs(title = "",
+       x = "Timepoints",
+       y = "Hunger Rating") +
+  scale_color_manual(values = c("hungry" = "gold", "sated" = "cornflowerblue")) +
+  myTheme
+ggsave("HS_check.png", plot = last_plot(), width = 8, height = 6, dpi = 300)
+
+ggplot(sum_data_long, aes(x = as.factor(timepoint2), y = pa, color = condition)) +
+  geom_boxplot(position = position_dodge2(width = 0.75, preserve = "single")) +
+  labs(title = "",
+       x = "Timepoints",
+       y = "Positive Affect") +
+  scale_color_manual(values = c("hungry" = "gold", "sated" = "cornflowerblue")) +
+  myTheme
+ggsave("pa_check.png", plot = last_plot(), width = 8, height = 6, dpi = 300)
+ggplot(sum_data_long, aes(x = as.factor(timepoint2), y = na, color = condition)) +
+  geom_boxplot(position = position_dodge2(width = 0.75, preserve = "single")) +
+  labs(title = "",
+       x = "Timepoints",
+       y = "Negative Affect") +
+  scale_color_manual(values = c("hungry" = "gold", "sated" = "cornflowerblue")) +
+  myTheme
+
+ggsave("na_check.png", plot = last_plot(), width = 8, height = 6, dpi = 300)
+```
+
+
