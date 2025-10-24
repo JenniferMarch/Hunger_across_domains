@@ -2,10 +2,18 @@
 title: "Eye-Track"
 output: html_document
 date: "2024-10-09"
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
 ---
 
 ## Info 
-Eye-tracking for social and discounting; the one for food can be found here: https://github.com/JenniferMarch/HungryLens/blob/main/Behaviour/D_Eyetracking.Rmd
+Eye-tracking for Manuscript on the effect of hunger state on attention and choice across domains (R version 4.4.1 (2024-06-14))
+Includes: 
+* Relationship between attention and choice (across 3 tasks: food, social, Intertemporal discounting) on both option and attribute level
+* Relationship between hunger state attention (across 3 tasks: food, social, Intertemporal discounting) on both option and attribute level
+* First and last fixations
+* Fixation Transitions (Payne Index)
+
+--> Output: Fig 3, Fig S7, Fig S8 and relevant stats
 
 ## 1 Preperations
 
@@ -35,52 +43,13 @@ load('had_data_2.RData')
 load("food_modeling_data.RData")
 load("social_modeling_data.RData")
 load("discount_modeling_data.RData")
-
-
-
 ```
 
 
 ## 2 Food
 ### 2.1 Choose taste given dwell time (Fig 3a)
 ```{r}
-# library(dplyr)
-# # #recode taste/health 
-# data_combined2$dwelldiff_taste <- 0
-# data_combined2$dwelldiff_rel_taste <- 0
-# data_combined2$total_dt <- data_combined2$foodleft_time + data_combined2$foodright_time + data_combined2$nutrileft_time + data_combined2$nutriright_time
-# 
-# data_combined2$choice2 <- ifelse(data_combined2$choice == "taste", 1, 0)
-# 
-# for (i in 1:nrow(data_combined2)){
-#   if((data_combined2$choice2[i]==1) && (data_combined2$response[i]=='left')) { # taste & left
-#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])
-#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i]))/data_combined2$total_dt[i]
-#   
-#     }else if ((data_combined2$choice2[i]==1) && (data_combined2$response[i]=='right')) { # taste & right
-#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])
-#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i]))/data_combined2$total_dt[i]
-#     
-#   }else if ((data_combined2$choice2[i]==0) && (data_combined2$response[i]=='left')) { # health & left
-#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])
-#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])-(data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i]))/data_combined2$total_dt[i]
-#     
-#   }else if ((data_combined2$choice2[i]==0) && (data_combined2$response[i]=='right')) { # health & right
-#     data_combined2$dwelldiff_taste[i] = (data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i])
-#     data_combined2$dwelldiff_rel_taste[i] = ((data_combined2$foodleft_time[i]+data_combined2$nutrileft_time[i])-(data_combined2$foodright_time[i]+data_combined2$nutriright_time[i]))/data_combined2$total_dt[i]
-#   }
-# } 
-
-```
-
-```{r}
 library(dplyr)
-# Calculate the mean probability and standard error for each bin
-# summary_taste <- data_combined2 %>%
-#   mutate(bin2 = cut(dwelldiff_taste, breaks = bin_edges, labels = c("<-700", "-600", "-400", "-200", "0", "200", "400", "600", ">700"), include.lowest = TRUE)) %>%
-#   group_by(bin2, condition) %>%
-#   summarise(mean_prob_taste = mean(choice2),
-#             std_error_taste = sd(choice2) / sqrt(n()))
 
 p1 <- ggplot(data_combined2, aes(x =dwelldiff_taste_rel, y = choice2, color = condition, fill=condition)) +
   geom_smooth(method = "glm", se = TRUE,  method.args = list(family=binomial), linetype = "solid", alpha=0.3) +
@@ -88,23 +57,20 @@ p1 <- ggplot(data_combined2, aes(x =dwelldiff_taste_rel, y = choice2, color = co
   scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
   labs(x = expression(bold(paste("DT", Delta, "(option"[paste("tasty")], " - option"[paste("healthy")], ")"))),, y = "P(Tasty Choice)") +
   geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = 0.5, color = "black", linetype = "dashed") +  
+  geom_vline(xintercept = 0, color = "black", linetype = "dashed") +  
   ylim(0,1)+
   myTheme+
   theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
-        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+        plot.margin = margin(10, 10, 20, 10))
 ggsave("pchoice_dwelltime.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 p1
 
 
 ```
 
-### 2.2 
-### 2.1 choose tasty given dwell time taste
-
+### 2.2 choose tasty given dwell time nutri
 ```{r}
 library(ggdist)
-
 summary_taste <- data_combined2 %>%
   group_by(nutri, condition, subject) %>%
   summarise(mean_prob_taste = mean(choice2),
@@ -158,15 +124,87 @@ p2 <- ggplot(summary_taste, aes(x = as.factor(nutri), y = mean_prob_taste, fill 
   ) +
   myTheme+
   theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
-        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+        plot.margin = margin(10, 10, 20, 10))
 ggsave("pchoice_dwelltime_nutri.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 p2
 
 ```
 
+### 2.3 Proportion DT Food Image by hunger state
+```{r}
+data_combined2$att_food <- (data_combined2$foodleft_time + data_combined2$foodright_time) /(data_combined2$foodleft_time + data_combined2$foodright_time + data_combined2$nutrileft_time + data_combined2$nutriright_time)
+
+combined_summary_food <- data_combined2 %>%
+  group_by(subject, condition) %>%
+  summarise(mean_att_food = mean(att_food),
+            std_error = sd(att_food) / sqrt(n()))
+
+
+dt_food <- ggplot(combined_summary_food, aes(x = condition, y = mean_att_food, fill = condition)) +
+  # Add the cloud (violin plot)
+  stat_halfeye(
+    adjust = 0.5,
+    width = 0.5,
+    alpha = 0.5,
+    justification = -0.2,
+    .width = 0,
+    point_colour = NA,
+    position = position_dodge(width = 0.8)  # Add dodge to violin plots
+  ) +
+  # Add the rain (individual points)
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.8, jitter.width = 0.15),
+    size = 1,
+    alpha = 0.5
+  ) +
+  # Add boxplot
+  geom_boxplot(
+    width = 0.1,
+    position = position_dodge(width = 0.8),  # Make sure dodge width matches
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  # Customize colors
+  scale_fill_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  #geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  labs(y = expression(bold(paste("P(DT"[paste("taste")], ")"))), x = "Condition") +
+
+  myTheme+
+  theme(panel.background = element_rect(color = "magenta", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+dt_food
+
+ggsave("dwelltime_taste_cond_food.png", width = 7, height = 7, plot = last_plot(), dpi = 300)
+```
+
+relevant stats
+```{r}
+#diff between conditions
+att_food_h<-subset(combined_summary_food, condition =='hungry')
+att_food_s<-subset(combined_summary_food, condition =='sated')
+
+ttest<-t.test(att_food_h$mean_att_food, att_food_s$mean_att_food, paired=TRUE)
+ttest
+
+effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
+
+```
+
+
 
 ## 3 Social
-### 2.1 choose selfish given dwell time option
+### 3.1 choose selfish given dwell time option
 
 ```{r}
 p1 <- ggplot(data_combined_social2, aes(x =(dwelldiff_rel_time), y = choice2, color = condition, fill=condition)) +
@@ -180,110 +218,13 @@ p1 <- ggplot(data_combined_social2, aes(x =(dwelldiff_rel_time), y = choice2, co
   ylim(0,1)+
   myTheme+
   theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
-        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+        plot.margin = margin(10, 10, 20, 10))
 ggsave("pchoice_dwelltime_social.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 p1
 
 ```
 
-
-### 2.1 choose selfish given dwell time self
-```{r}
-# add again GLMM to create prediction plot
-library(lme4)
-library(lmerTest)
-social_model4 <- glmer(choice2 ~ condition + scale(dwelldiff_rel_time) + scale(rel_dwelldiff_self2) + (1 + condition + scale(rel_dwelldiff_self2)| subject), data = data_combined_social2, family = binomial(link = "logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
-
-```
-
-```{r}
-# Create prediction data frame with a reference subject
-reference_subject <- data_combined_social2$subject[1]
-
-pred_data <- expand.grid(
-  rel_dwelldiff_self2 = seq(-1, 1, length.out = 100),
-  condition = c("hungry", "sated"),
-  dwelldiff_rel_time = mean(data_combined_social2$dwelldiff_rel_time, na.rm = TRUE),
-  subject = reference_subject
-)
-
-# Get predictions using only fixed effects (ignoring the random effects)
-pred_intervals <- merTools::predictInterval(social_model4, newdata = pred_data, 
-                                 level = 0.95, n.sims = 5000,
-                                 type = "probability", which = "fixed")
-
-pred_data$predicted <- pred_intervals$fit
-pred_data$lower <- pred_intervals$lwr
-pred_data$upper <- pred_intervals$upr
-
-n <- 140 # 70*2 
-pred_data$se <- sqrt(pred_data$predicted * (1 - pred_data$predicted) / n)
-
-# Create plot
-ggplot(pred_data, aes(x = rel_dwelldiff_self2, y = predicted, color = condition)) +
-  geom_line(size = 1.2) +
-  geom_ribbon(aes(ymin = predicted-se, ymax = predicted+se, fill = condition), 
-              alpha = 0.2, color = NA) +
-  scale_color_manual(values = c("gold", "cornflowerblue")) +
-  scale_fill_manual(values = c("gold", "cornflowerblue")) +
-  labs(x = expression(bold(paste("DT", Delta, "(attribute"[paste("self")], " - attribute"[paste("NGO")], ")"))), y = "P(Selfish Choice)") +
-  geom_hline(yintercept = 0.5, linetype = "dashed") +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  ylim(0,1) +
-  myTheme+
-  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
-        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
-
-ggsave("attributedt_choice_social.png", width = 8, height = 6, plot = last_plot(), dpi = 300)
-```
-
-
-
-### 2.2 Plot more attention to ngo attribute under hunger?
-```{r}
-data_combined_social2$att_self <- (data_combined_social2$selfleft_time + data_combined_social2$selfright_time) / data_combined_social2$total_dt
-
-combined_summary <- data_combined_social2 %>%
-  group_by(subject, condition) %>%
-  summarise(mean_att_self = mean(att_self),
-            std_error = sd(att_self) / sqrt(n()))
-
-library(ggdist)
-
-# Create a raincloud plot
-raincloud_plot <- ggplot(combined_summary, aes(x = condition, y = mean_att_self, fill = condition)) +
-  geom_violin(trim = FALSE, alpha = 0.6) +
-  #geom_boxplot(width = 0.1, fill = "white", color = "black", outlier.shape = NA) +
-  geom_point(position = position_jitter(width = 0.15), size = 1) +
-  geom_hline(yintercept = 0.5, color = "black", linetype="dashed") +
-  scale_fill_manual(values = c("gold", "cornflowerblue")) +
-  xlab("Condition") +
-  ylab("P(Dwell Time Self)") +
-  #ggtitle("Mean Dwell Time Self Attribute per Condition") +
-  ylim(0,1)+
-  #scale_fill_manual(values = c("sated" = "cornflowerblue", "hungry" = "gold")) + 
-  myTheme
-
-
-# Display the raincloud plot
-raincloud_plot
-
-ggsave("dwelltime_self_cond_social.png", width = 7, height = 7, plot = last_plot(), dpi = 300)
-
-```
-stasts...
-```{r}
-att_self_h<-subset(combined_summary, condition =='hungry')
-att_self_s<-subset(combined_summary, condition =='sated')
-
-ttest<-t.test(att_self_h$mean_att_self, att_self_s$mean_att_self, paired=TRUE)
-ttest
-
-effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
-# no difference
-```
-
-Does HS predict attention 
+Differences in option DT(selfish - prosocial) between conditions
 ```{r}
 combined_summary_social <- data_combined_social2 %>%
   group_by(subject, condition) %>%
@@ -306,7 +247,147 @@ effect_size_tt3
 ```
 
 
-### 2.3 Lets take a look at first and last fixations
+### 3.2 choose selfish given dwell time self
+add again GLMM to create prediction plot
+```{r}
+library(lme4)
+library(lmerTest)
+social_model4 <- glmer(choice2 ~ condition + scl_dwelldiff_rel_time + scl_rel_dwelldiff_self2 + (1 + condition + scl_rel_dwelldiff_self2| subject), data = data_combined_social2, family = binomial(link = "logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+```
+
+
+When using the same method s in 3.1 juts on the attribute level, the slope is positive, however, our GLMM indicated a negative efefct of DT(self-ngo)
+Why: 
+*Prosocial people: Always choose prosocially, barely look at selfish options; low mean_selfDT, low choice rate
+*Selfish people: Often choose selfishly, look at selfish options a lot; high mean_selfDT, high choice rate
+-->BUT within each person on any given trial:Looking longer at selfish option might indicate conflict; actually choosing the prosocial option after deliberating
+
+For the manuscript we want to tell a straightforward story and show a Figure which reflects the result from the GLMM, therefore, we use prediction data from our GLMM to reflect the predictor of DT(self-NGO) which takes the variability from the random efefcts into account
+```{r}
+library(merTools)
+# Create prediction data frame with a reference subject
+reference_subject <- data_combined_social2$subject[1]
+
+pred_data <- expand.grid(
+  scl_rel_dwelldiff_self2 = seq(-1, 1, length.out = 100),
+  condition = c("sated", "hungry"),
+  scl_dwelldiff_rel_time = mean(data_combined_social2$scl_dwelldiff_rel_time, na.rm = TRUE),
+  subject = reference_subject
+)
+
+# Get predictions using only fixed effects
+pred_intervals <- merTools::predictInterval(social_model4, newdata = pred_data, 
+                                 level = 0.95, n.sims = 5000,
+                                 type = "probability", which = "fixed")
+
+pred_data$predicted <- pred_intervals$fit
+pred_data$lower <- pred_intervals$lwr
+pred_data$upper <- pred_intervals$upr
+
+n <- 140 # 70*2 
+pred_data$se <- sqrt(pred_data$predicted * (1 - pred_data$predicted) / n)
+
+# Create plot
+ggplot(pred_data, aes(x = scl_rel_dwelldiff_self2, y = predicted, color = condition)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = predicted-se, ymax = predicted+se, fill = condition), 
+              alpha = 0.2, color = NA) +
+  scale_color_manual(values = c("gold", "cornflowerblue")) +
+  scale_fill_manual(values = c("gold", "cornflowerblue")) +
+  labs(x = expression(bold(paste("DT", Delta, "(attribute"[paste("self")], " - attribute"[paste("NGO")], ")"))), y = "P(Selfish Choice)") +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  ylim(0,1) +
+  myTheme+
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+
+ggsave("attributedt_choice_social.png", width = 8, height = 6, plot = last_plot(), dpi = 300)
+```
+
+
+### 3.3 Plot more attention to ngo attribute under hunger?
+```{r}
+data_combined_social2$att_self <- (data_combined_social2$selfleft_time + data_combined_social2$selfright_time) / data_combined_social2$total_dt
+
+combined_summary <- data_combined_social2 %>%
+  group_by(subject, condition) %>%
+  summarise(mean_att_self = mean(att_self),
+            std_error = sd(att_self) / sqrt(n()))
+
+library(ggdist)
+
+dt_social <- ggplot(combined_summary, aes(x = condition, y = mean_att_self, fill = condition)) +
+  # Add the cloud (violin plot)
+  stat_halfeye(
+    adjust = 0.5,
+    width = 0.5,
+    alpha = 0.5,
+    justification = -0.2,
+    .width = 0,
+    point_colour = NA,
+    position = position_dodge(width = 0.8)  # Add dodge to violin plots
+  ) +
+  # Add the rain (individual points)
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.8, jitter.width = 0.15),
+    size = 1,
+    alpha = 0.5
+  ) +
+  # Add boxplot
+  geom_boxplot(
+    width = 0.1,
+    position = position_dodge(width = 0.8),  # Make sure dodge width matches
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  # Customize colors
+  scale_fill_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+#labs(x = expression(bold(paste("DT", Delta, "(attribute"[paste("self")], " - attribute"[paste("NGO")], ")"))), y = "P(Selfish Choice)") +
+  labs(y = expression(bold(paste("P(DT"[paste("self")], ")"))), x = "Condition") +
+  # labs(
+  #   x = "Condition",
+  #   y = "P(DT(self))",
+  #   fill = "Condition",
+  #   color = "Condition"
+  # ) +
+  myTheme+
+  theme(panel.background = element_rect(color = "orange", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+dt_social
+
+ggsave("dwelltime_self_cond_social.png", width = 7, height = 7, plot = last_plot(), dpi = 300)
+```
+
+
+stasts...
+```{r}
+att_self_h<-subset(combined_summary, condition =='hungry')
+att_self_s<-subset(combined_summary, condition =='sated')
+
+ttest<-t.test(att_self_h$mean_att_self, att_self_s$mean_att_self, paired=TRUE)
+ttest
+
+effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
+effect_size3
+# no difference
+```
+
+
+
+### 3.4 Lets take a look at first and last fixations
 ```{r}
 nsubj <- length(unique(data_combined2$subject))
 data_social_hungry_long_w0<-data_social_hungry_long
@@ -314,7 +395,7 @@ data_social_sated_long_w0<-data_social_sated_long
 data_social_hungry_long<-subset(data_social_hungry_long, fixElement != 0)
 data_social_sated_long<-subset(data_social_sated_long, fixElement != 0)
 ```
-#### 2.3.1 Recode for position
+#### 3.4.1 Recode for position
 ```{r}
 #Fixated Element code
 #1 = self left
@@ -355,8 +436,8 @@ data_social_sated_long$fixElement2 <- recode_fixation(data_social_sated_long$fix
 
 ```
 
-#### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
-##### 2.3.2.1 hungry
+#### 3.4.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
+##### 3.4.2.1 hungry
 ```{r}
 library("dplyr")
 # Group the data by trial and subject
@@ -403,7 +484,7 @@ last_fix_social_hungry_loc<-last_fix_social_hungry %>%
 
 ```
 
-##### 2.3.2.2 sated
+##### 3.4.2.2 sated
 ```{r}
 # Group the data by trial and subject
 grouped_social_data_sated <- data_social_sated_long %>%
@@ -450,7 +531,7 @@ last_fix_social_sated_loc<-last_fix_social_sated %>%
 ```
 
 
-PLOT THE STUFF!!
+##### 3.4.2.3 Plot
 ```{r}
 plot_fixation_proportions <- function(hungry_data, sated_data, fixation_type = c("first", "last"), plot_type = c("location", "category"),custom_labels = NULL) {
   
@@ -533,7 +614,7 @@ ggsave("prop_lastfix_cat_social.png", p4, width = 7, height = 7, dpi = 300)
 ```
 
 
-### 2.4 Fixation  Transitions
+### 3.5 Fixation Transitions
 ```{r}
 create_fixation_transitions <- function(data) {
   data$transition <- 'NA'
@@ -672,8 +753,7 @@ trans_filled %>%
 ## No differences between conditions
 ```
 ## 4 Discount
-### 4.1 choose impulsive given dwell time
-
+### 4.1 choose impulsive given rel. dwell time (impatient - patient option)
 ```{r}
 p1 <- ggplot(data_combined_discount2, aes(x =(dwelldiff_impatient_rel), y = choice2, color = condition, fill=condition)) +
     geom_smooth(method = "glm", method.args = list(family=binomial), se = TRUE, 
@@ -682,18 +762,40 @@ p1 <- ggplot(data_combined_discount2, aes(x =(dwelldiff_impatient_rel), y = choi
   scale_fill_manual(values = c("gold", "cornflowerblue")) +  # Set fill colors for each condition
   labs(x = expression(bold(paste("DT", Delta, "(option"[paste("impatient")], " - option"[paste("patient")], ")"))), y = "P(Impatient Choice)") +
   geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
-  geom_vline(xintercept = 0.5, color = "black", linetype = "dashed") +  
+  geom_vline(xintercept = 0, color = "black", linetype = "dashed") +  
   ylim(0,1)+
   myTheme+
   theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
-        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+        plot.margin = margin(10, 10, 20, 10))
 
-ggsave("pchoice_dwelltime_social.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
+ggsave("pchoice_dwelltime_discount.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 p1
 
 ```
 
+Differnece in attention to options based on hunger state
+```{r}
+combined_summary_discount <- data_combined_discount2 %>%
+  group_by(subject, condition) %>%
+  summarise(mean_att_option = mean(dwelldiff_impatient_rel),
+            mean_att_attribute = mean(rel_dwelldiff_delay))
 
+
+ttest4<-t.test(combined_summary_discount$mean_att_option[combined_summary_discount$condition == "hungry"], combined_summary_discount$mean_att_option[combined_summary_discount$condition == "sated"], paired=TRUE)
+ttest4
+
+effect_size_tt4 <- ttest4$statistic / sqrt(ttest4$parameter)
+effect_size_tt4
+
+ttest5<-t.test(combined_summary_discount$mean_att_attribute[combined_summary_discount$condition == "hungry"], combined_summary_discount$mean_att_attribute[combined_summary_discount$condition == "sated"], paired=TRUE)
+ttest5
+
+effect_size_tt5 <- ttest5$statistic / sqrt(ttest5$parameter)
+effect_size_tt5
+```
+
+### 4.2 choose impulsive given rel. dwell time (delay - amount attribute)
+same approach as in social to reflect predictor of GLMM (taking random efefcts structure into account, rather than population level effects)
 ```{r}
 discount_model4 <- glmer(choice2~condition + scale(dwelldiff_impatient_rel) +scale(rel_dwelldiff_delay) + (1+condition+scale(rel_dwelldiff_delay)|subject), data=data_combined_discount2, family=binomial(link="logit"), control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
@@ -705,8 +807,8 @@ reference_subject2 <- data_combined_discount2$subject[1]
 
 pred_data2 <- expand.grid(
   rel_dwelldiff_delay = seq(-1, 1, length.out = 100),
-  condition = c("hungry", "sated"),
-  dwelldiff_impatient_rel = mean(data_combined_discount2$dwelldiff_impatient_rel, na.rm = TRUE),
+  condition = c("sated","hungry"),
+  dwelldiff_impatient_rel = mean(data_combined_discount2$scl_dwelldiff_impatient_rel, na.rm = TRUE),
   subject = reference_subject2
 )
 
@@ -733,98 +835,100 @@ ggplot(pred_data2, aes(x = rel_dwelldiff_delay, y = predicted, color = condition
   ylim(0,1) +
   myTheme+
   theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
-        plot.margin = margin(10, 10, 20, 10),axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14))
+        plot.margin = margin(10, 10, 20, 10))
 
 ggsave("attributedt_choice_discount.png",  width = 8, height = 6, plot = last_plot(), dpi = 300)
 ```
 
 
-### 4.2 Plot more attention to delay attribute under hunger?
+### 4.3 Plot more attention to delay attribute under hunger?
 ```{r}
-data_combined_discount2$att_time<-0
-for (n in 1:nrow(data_combined_discount2)) {
-  data_combined_discount2$att_amount[n] <- (data_combined_discount2$amountleft_time[n] + data_combined_discount2$amountright_time[n]) /
-                (sum(data_combined_discount2$delayleft_time[n] + data_combined_discount2$delayright_time[n] +
-                    data_combined_discount2$amountleft_time[n] + data_combined_discount2$amountright_time[n]))
-}
+
+data_combined_discount2$att_delay <- (data_combined_discount2$delayleft_time + data_combined_discount2$delayright_time) /
+                ((data_combined_discount2$delayleft_time + data_combined_discount2$delayright_time +
+                    data_combined_discount2$amountleft_time + data_combined_discount2$amountright_time))
 
 #delete NA trials
-data_combined_discount3 <- subset(data_combined_discount2,att_amount!='NaN')
+data_combined_discount3 <- subset(data_combined_discount2,att_delay!='NaN')
 
-combined_summary <- data_combined_discount3 %>%
+combined_summary_disc <- data_combined_discount3 %>%
   group_by(subject, condition) %>%
-  summarise(mean_att_amount = mean(att_amount),
-            std_error = sd(att_amount) / sqrt(n()))
-
-library(ggdist)
-
-# Create a raincloud plot
-raincloud_plot <- ggplot(combined_summary, aes(x = condition, y = mean_att_amount, fill = condition)) +
-  geom_violin(trim = FALSE, alpha = 0.8) +
-  #geom_boxplot(width = 0.1, fill = "white", color = "black", outlier.shape = NA) +
-  geom_point(position = position_jitter(width = 0.15), size = 1) +
-  geom_hline(yintercept = 0.5, color = "black", linetype="dashed") +
-  scale_fill_manual(values = c("gold", "cornflowerblue")) +
-  xlab("Condition") +
-  ylab("P(Dwell Time Amount)") +
-  #ggtitle("Mean Dwell Time Self Attribute per Condition") +
-  ylim(0,1)+
-  #scale_fill_manual(values = c("sated" = "cornflowerblue", "hungry" = "gold")) + 
-  myTheme
+  summarise(mean_att_delay = mean(att_delay),
+            std_error = sd(att_delay) / sqrt(n()))
 
 
-# Display the raincloud plot
-raincloud_plot
+dt_delay <- ggplot(combined_summary_disc, aes(x = condition, y = mean_att_delay, fill = condition)) +
+  # Add the cloud (violin plot)
+  stat_halfeye(
+    adjust = 0.5,
+    width = 0.5,
+    alpha = 0.5,
+    justification = -0.2,
+    .width = 0,
+    point_colour = NA,
+    position = position_dodge(width = 0.8)  # Add dodge to violin plots
+  ) +
+  # Add the rain (individual points)
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.8, jitter.width = 0.15),
+    size = 1,
+    alpha = 0.5
+  ) +
+  # Add boxplot
+  geom_boxplot(
+    width = 0.1,
+    position = position_dodge(width = 0.8),  # Make sure dodge width matches
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  # Customize colors
+  scale_fill_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      "sated" = "cornflowerblue",
+      "hungry" = "gold"
+    )
+  ) +
+  geom_hline(yintercept = 0.5, color = "black", linetype = "dashed") +
+  labs(y = expression(bold(paste("P(DT"[paste("delay")], ")"))), x = "Condition") +
 
-ggsave("dwelltime_self_cond_discount.png", width = 7, height = 7, plot = last_plot(), dpi = 300)
+  myTheme+
+  theme(panel.background = element_rect(color = "#00FFFF", linewidth = 2, fill = NA),
+        plot.margin = margin(10, 10, 20, 10))
+dt_delay
 
+ggsave("dwelltime_delay_cond_discount.png", width = 7, height = 7, plot = last_plot(), dpi = 300)
 ```
+
 stats...
 ```{r}
 #diff between conditions
-att_amount_h<-subset(combined_summary, condition =='hungry')
-att_amount_s<-subset(combined_summary, condition =='sated')
+att_delay_h<-subset(combined_summary_disc, condition =='hungry')
+att_delay_s<-subset(combined_summary_disc, condition =='sated')
 
-ttest<-t.test(att_amount_h$mean_att_amount, att_amount_s$mean_att_amount, paired=TRUE)
+ttest<-t.test(att_delay_h$mean_att_delay, att_delay_s$mean_att_delay, paired=TRUE)
 ttest
 
 effect_size3 <- ttest$statistic / sqrt(ttest$parameter)
-
+effect_size3
 #different that .5?
-ttest_h <- t.test(att_amount_h$mean_att_amount, mu = 0.5)
+ttest_h <- t.test(att_delay_h$mean_att_delay, mu = 0.5)
 ttest_h
 
-# Conduct a one-sample t-test for the second condition (att_amount_s)
-ttest_s <- t.test(att_amount_s$mean_att_amount, mu = 0.5)
+# Conduct a one-sample t-test for the second condition (att_delay_s)
+ttest_s <- t.test(att_delay_s$mean_att_delay, mu = 0.5)
 ttest_s
-# no difference between conditions, but participants spent significantly more time on the time attribute in both conditions!
+# no difference between conditions, but participants spent significantly more time on the amount attribute in both conditions!
 ```
 
-```{r}
-combined_summary_discount <- data_combined_discount2 %>%
-  group_by(subject, condition) %>%
-  summarise(mean_att_option = mean(dwelldiff_impatient_rel),
-            mean_att_attribute = mean(rel_dwelldiff_delay))
 
 
-
-ttest4<-t.test(combined_summary_discount$mean_att_option[combined_summary_discount$condition == "hungry"], combined_summary_discount$mean_att_option[combined_summary_discount$condition == "sated"], paired=TRUE)
-ttest4
-
-effect_size_tt4 <- ttest4$statistic / sqrt(ttest4$parameter)
-effect_size_tt4
-
-ttest5<-t.test(combined_summary_discount$mean_att_attribute[combined_summary_discount$condition == "hungry"], combined_summary_discount$mean_att_attribute[combined_summary_discount$condition == "sated"], paired=TRUE)
-ttest5
-
-effect_size_tt5 <- ttest5$statistic / sqrt(ttest5$parameter)
-effect_size_tt5
-```
-
-''''''*2wÄ
-
-
-### 4.3 Lets take a look at first and last fixations
+### 4.4 Lets take a look at first and last fixations
 Function to categorise where (location and content participants looked when)
 ```{r}
 data_discount_hungry_long_w0<-data_discount_hungry_long
@@ -832,7 +936,7 @@ data_discount_sated_long_w0<-data_discount_sated_long
 data_discount_hungry_long<-subset(data_discount_hungry_long, fixElement != 0)
 data_discount_sated_long<-subset(data_discount_sated_long, fixElement != 0)
 ```
-#### 4.3.1 Recode for position
+#### 4.4.1 Recode for position
 ```{r}
 #Fixated Element code
 #1 = time left
@@ -870,9 +974,9 @@ data_discount_sated_long$fixElement2 <- recode_fixation2(data_discount_sated_lon
 
 ```
 
-#### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
+#### 4.4.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
 
-##### 2.3.2.1 hungry
+##### 4.4.2.1 hungry
 ```{r}
 # Group the data by trial and subject
 grouped_discount_data_hungry <- data_discount_hungry_long %>%
@@ -918,7 +1022,7 @@ last_fix_discount_hungry_loc<-last_fix_discount_hungry %>%
 
 ```
 
-##### 2.3.2.2 sated
+##### 4.4.2.2 sated
 ```{r}
 # Group the data by trial and subject
 grouped_discount_data_sated <- data_discount_sated_long %>%
@@ -963,7 +1067,7 @@ last_fix_discount_sated_loc<-last_fix_discount_sated %>%
             condition = "sated")
 
 ```
-
+##### 4.4.2.3 Plottings
 ```{r}
 location_labels <- c("1" ="upper left","2" ="upper right", "3" ="lower left","4" ="lower right")
 category_labels <- c("1" = "amount left", "2" = "amount right", "3" = "delay left", "4" = "delay right")
@@ -994,7 +1098,7 @@ ggsave("prop_lastfix_cat_discount.png", p8, width = 7, height = 7, dpi = 300)
 ```
 
 
-
+### 4.4.3 Fixation transitions
 ```{r}
 data_discount_hungry_long <- create_fixation_transitions(data_discount_hungry_long)
 data_discount_sated_long <- create_fixation_transitions(data_discount_sated_long)
@@ -1052,9 +1156,8 @@ ggsave("average_transitions_discount.png", width = 9, height = 7, plot = last_pl
 ```
 
 
-### First and last Fixations food
+#### 4.4.3 First and last Fixations food
 
-### 2.3 Lets take a look at first and last fixations
 ```{r}
 nsubj <- length(unique(data_combined2$subject))
 data_hungry_long_w0<-data_hungry_long
@@ -1103,10 +1206,9 @@ data_sated_long$fixElement2 <- recode_fixation(data_sated_long$fixElement,data_s
 
 ```
 
-#### 2.3.2 Get first and last fixations for category and postion as well as hungry and sated dataframe
-##### 2.3.2.1 hungry
+
 ```{r}
-library("dplyr")
+
 # Group the data by trial and subject
 grouped_data_hungry <- data_hungry_long %>%
   group_by(trial, subject)
@@ -1151,7 +1253,6 @@ last_fix_hungry_loc<-last_fix_hungry %>%
 
 ```
 
-##### 2.3.2.2 sated
 ```{r}
 # Group the data by trial and subject
 grouped_data_sated <- data_sated_long %>%
@@ -1225,7 +1326,7 @@ p12 <- plot_fixation_proportions(hungry_data = list(first_fix_hungry_cat = first
 p12
 ggsave("prop_lastfix_cat_food.png", p12, width = 7, height = 7, dpi = 300)
 ```
-
+Transitions
 ```{r}
 data_hungry_long <- create_fixation_transitions(data_hungry_long)
 data_sated_long <- create_fixation_transitions(data_sated_long)

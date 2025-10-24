@@ -2,12 +2,13 @@
 title: "Additional Graphs"
 output: html_document
 date: "2024-10-08"
-author: Jennifer March (jennifer.march@uni-hamburg.de)
+author: "Jennifer March (jennifer.march@uni-hamburg.de)"
 ---
 
 ### Information
 This script creates the quantile plots and VD plot and assess success of manipulation
-**Requirements** had_data.RData; had_data_2.RData (in data folder from this git repository: https://github.com/JenniferMarch/Hunger_across_domains)
+**Requirements** had_data.RData; had_data_2.RData 
+**Output** Fig S1, Fig S2
 
 ### 1 Preparation
 #### 1.1 Load Data
@@ -17,7 +18,6 @@ rm(list=ls())
 
 #clear all plots
 if(!is.null(dev.list())) dev.off()
-
 load('had_data.RData')
 load('had_data_2.RData')
 ```
@@ -170,26 +170,6 @@ data_combined_neu<-data_combined_neu %>%
 
 data_combined_neu<-data_combined_neu %>% 
   dplyr::mutate(response2=dplyr::recode(response, 'left'=1, 'right'=0))
-
-# # Berkowich transformation 
-# 
-# berk_trans <- function (data, value_column1, value_column2, vd_column, mini, maxi){
-#   data[[value_column1]] <- (mini+((data[[value_column1]]-min(data[[value_column1]]))*(maxi-mini))/(max(data[[value_column1]])-min(data[[value_column1]])))
-#   data[[value_column2]] <- (mini+((data[[value_column2]]-min(data[[value_column2]]))*(maxi-mini))/(max(data[[value_column2]])-min(data[[value_column2]])))
-#   data[[vd_column]] <- data[[value_column1]] - data[[value_column2]]
-#   return(data)
-# }
-# 
-# data_combined_neu <- berk_trans(data_combined_neu, "taste_left", "taste_right", "taste_vd", 1, 10)
-# data_combined_neu <- berk_trans(data_combined_neu, "health_left", "health_right", "health_vd", 1, 10)
-# data_combined_neu <- berk_trans(data_combined_neu, "pref_left", "pref_right", "pref_vd", 1, 10)
-# data_combined_neu <- berk_trans(data_combined_neu, "cal_left", "cal_right", "cal_vd", 1, 10)
-# 
-# data_social_combined <- berk_trans(data_social_combined, "self_left", "self_right", "self_vd", 1, 10)
-# data_social_combined <- berk_trans(data_social_combined, "ngo_left", "ngo_right", "ngo_vd", 1, 10)
-# 
-# data_discount_combined <- berk_trans(data_discount_combined, "time_left", "time_right", "time_vd", 1, 10)
-# data_discount_combined <- berk_trans(data_discount_combined, "value_left", "value_right", "value_vd", 1, 10)
 
 ```
 
