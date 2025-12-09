@@ -5,6 +5,7 @@ This is the repository where I am storing the code used to generate **1 behaviou
 ### Data
 
 Given size, all data is stored on Zenodo (https://doi.org/10.5281/zenodo.17284917)
+* note that in some browsers the files might be renamed when downloaded; Safari and Chrome work fine
 
 ## 1 Behavioual Analyses
 
